@@ -431,28 +431,3 @@ echo $OPENAI_API_KEY
 
 # Check .env file
 cat .env
-```
-
-## 🗺️ Roadmap
-
-### Version 1.1
-- [ ] Advanced analytics dashboard
-- [ ] Real-time notifications
-- [ ] Batch processing capabilities
-- [ ] Enhanced error handling
-
-### Version 1.2
-- [ ] Multi-language support
-- [ ] Advanced ML models
-- [ ] Performance optimization
-- [ ] Extended social platform support
-
-### Version 2.0
-- [ ] Microservices architecture
-- [ ] Event-driven processing
-- [ ] Advanced AI capabilities
-- [ ] Enterprise features
-
----
-
-**Built with ❤️ by the Bloocube Team**
