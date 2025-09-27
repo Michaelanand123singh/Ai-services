@@ -1,0 +1,524 @@
+"""
+RAG (Retrieval-Augmented Generation) service for AI-powered insights
+"""
+from typing import List, Dict, Any, Optional
+import asyncio
+import time
+from dataclasses import dataclass
+
+from src.core.config import settings
+from src.core.logger import ai_logger, log_ai_model_call
+from src.core.exceptions import AIServiceException, EmbeddingError, VectorDatabaseError
+from src.models.llm_client import LLMClient
+from src.models.embedding_model import EmbeddingModel
+from src.models.vector_store import VectorStore
+from src.utils.helpers import clean_text, extract_keywords
+
+
+@dataclass
+class RAGContext:
+    """Context for RAG operations"""
+    user_id: str
+    query: str
+    context_documents: List[Dict[str, Any]]
+    max_tokens: int = 4000
+    temperature: float = 0.7
+
+
+class RAGService:
+    """RAG service for generating AI-powered insights"""
+    
+    def __init__(self):
+        self.llm_client = LLMClient()
+        self.embedding_model = EmbeddingModel()
+        self.vector_store = VectorStore()
+        self.logger = ai_logger
+    
+    async def generate_competitor_insights(
+        self, 
+        analysis_results: Dict[str, Any],
+        user_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Generate AI-powered insights from competitor analysis results"""
+        try:
+            start_time = time.time()
+            
+            # Prepare context for RAG
+            context_documents = self._prepare_competitor_context(analysis_results)
+            
+            # Create RAG context
+            rag_context = RAGContext(
+                user_id=user_context.get("user_id"),
+                query=f"Analyze competitor strategies and provide actionable insights for {user_context.get('analysis_type', 'comprehensive')} analysis",
+                context_documents=context_documents
+            )
+            
+            # Generate insights using RAG
+            insights = await self._generate_insights_with_rag(rag_context)
+            
+            processing_time = int((time.time() - start_time) * 1000)
+            self.logger.log_ai_operation(
+                operation="competitor_insights_generation",
+                model=settings.openai_model,
+                tokens_used=insights.get("tokens_used", 0),
+                duration_ms=processing_time,
+                success=True
+            )
+            
+            return insights
+            
+        except Exception as e:
+            self.logger.log_error(e, {"operation": "generate_competitor_insights"})
+            raise AIServiceException(f"Failed to generate competitor insights: {str(e)}")
+    
+    async def generate_hashtag_suggestions(
+        self,
+        content: Optional[str],
+        content_type: str,
+        platform: str,
+        target_audience: Optional[str],
+        goals: List[str],
+        max_suggestions: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Generate hashtag suggestions using RAG"""
+        try:
+            start_time = time.time()
+            
+            # Prepare query for hashtag generation
+            query = self._build_hashtag_query(content, content_type, platform, target_audience, goals)
+            
+            # Retrieve relevant context from vector store
+            context_documents = await self._retrieve_hashtag_context(
+                content_type, platform, target_audience
+            )
+            
+            # Create RAG context
+            rag_context = RAGContext(
+                user_id="system",  # System-generated
+                query=query,
+                context_documents=context_documents,
+                max_tokens=2000
+            )
+            
+            # Generate hashtag suggestions
+            suggestions = await self._generate_hashtag_suggestions_with_rag(rag_context, max_suggestions)
+            
+            processing_time = int((time.time() - start_time) * 1000)
+            self.logger.log_ai_operation(
+                operation="hashtag_suggestions_generation",
+                model=settings.openai_model,
+                tokens_used=suggestions.get("tokens_used", 0),
+                duration_ms=processing_time,
+                success=True
+            )
+            
+            return suggestions.get("hashtags", [])
+            
+        except Exception as e:
+            self.logger.log_error(e, {"operation": "generate_hashtag_suggestions"})
+            raise AIServiceException(f"Failed to generate hashtag suggestions: {str(e)}")
+    
+    async def generate_caption_suggestions(
+        self,
+        content: Optional[str],
+        content_type: str,
+        platform: str,
+        tone: str,
+        target_audience: Optional[str],
+        goals: List[str],
+        max_suggestions: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Generate caption suggestions using RAG"""
+        try:
+            start_time = time.time()
+            
+            # Prepare query for caption generation
+            query = self._build_caption_query(content, content_type, platform, tone, target_audience, goals)
+            
+            # Retrieve relevant context
+            context_documents = await self._retrieve_caption_context(
+                content_type, platform, tone, target_audience
+            )
+            
+            # Create RAG context
+            rag_context = RAGContext(
+                user_id="system",
+                query=query,
+                context_documents=context_documents,
+                max_tokens=3000
+            )
+            
+            # Generate caption suggestions
+            suggestions = await self._generate_caption_suggestions_with_rag(rag_context, max_suggestions)
+            
+            processing_time = int((time.time() - start_time) * 1000)
+            self.logger.log_ai_operation(
+                operation="caption_suggestions_generation",
+                model=settings.openai_model,
+                tokens_used=suggestions.get("tokens_used", 0),
+                duration_ms=processing_time,
+                success=True
+            )
+            
+            return suggestions.get("captions", [])
+            
+        except Exception as e:
+            self.logger.log_error(e, {"operation": "generate_caption_suggestions"})
+            raise AIServiceException(f"Failed to generate caption suggestions: {str(e)}")
+    
+    async def generate_posting_time_suggestions(
+        self,
+        platform: str,
+        content_type: str,
+        target_audience: Optional[str],
+        user_id: str
+    ) -> Dict[str, Any]:
+        """Generate optimal posting time suggestions"""
+        try:
+            start_time = time.time()
+            
+            # Retrieve user's historical posting data and platform-specific insights
+            context_documents = await self._retrieve_posting_time_context(
+                platform, content_type, target_audience, user_id
+            )
+            
+            # Create RAG context
+            rag_context = RAGContext(
+                user_id=user_id,
+                query=f"Determine optimal posting times for {content_type} on {platform}",
+                context_documents=context_documents,
+                max_tokens=1500
+            )
+            
+            # Generate posting time suggestions
+            suggestions = await self._generate_posting_time_suggestions_with_rag(rag_context)
+            
+            processing_time = int((time.time() - start_time) * 1000)
+            self.logger.log_ai_operation(
+                operation="posting_time_suggestions_generation",
+                model=settings.openai_model,
+                tokens_used=suggestions.get("tokens_used", 0),
+                duration_ms=processing_time,
+                success=True
+            )
+            
+            return suggestions
+            
+        except Exception as e:
+            self.logger.log_error(e, {"operation": "generate_posting_time_suggestions"})
+            raise AIServiceException(f"Failed to generate posting time suggestions: {str(e)}")
+    
+    async def generate_content_ideas(
+        self,
+        content_type: str,
+        platform: str,
+        target_audience: Optional[str],
+        goals: List[str],
+        tone: str,
+        max_suggestions: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Generate content ideas using RAG"""
+        try:
+            start_time = time.time()
+            
+            # Retrieve trending content and successful content patterns
+            context_documents = await self._retrieve_content_ideas_context(
+                content_type, platform, target_audience, goals
+            )
+            
+            # Create RAG context
+            rag_context = RAGContext(
+                user_id="system",
+                query=f"Generate creative content ideas for {content_type} on {platform} targeting {target_audience or 'general audience'}",
+                context_documents=context_documents,
+                max_tokens=4000
+            )
+            
+            # Generate content ideas
+            ideas = await self._generate_content_ideas_with_rag(rag_context, max_suggestions)
+            
+            processing_time = int((time.time() - start_time) * 1000)
+            self.logger.log_ai_operation(
+                operation="content_ideas_generation",
+                model=settings.openai_model,
+                tokens_used=ideas.get("tokens_used", 0),
+                duration_ms=processing_time,
+                success=True
+            )
+            
+            return ideas.get("content_ideas", [])
+            
+        except Exception as e:
+            self.logger.log_error(e, {"operation": "generate_content_ideas"})
+            raise AIServiceException(f"Failed to generate content ideas: {str(e)}")
+    
+    async def predict_engagement(
+        self,
+        content: Optional[str],
+        content_type: str,
+        platform: str,
+        hashtags: List[Dict[str, Any]],
+        target_audience: Optional[str]
+    ) -> Dict[str, Any]:
+        """Predict engagement for content using RAG"""
+        try:
+            start_time = time.time()
+            
+            # Retrieve similar content performance data
+            context_documents = await self._retrieve_engagement_context(
+                content_type, platform, target_audience
+            )
+            
+            # Create RAG context
+            rag_context = RAGContext(
+                user_id="system",
+                query=f"Predict engagement for {content_type} content on {platform}",
+                context_documents=context_documents,
+                max_tokens=2000
+            )
+            
+            # Generate engagement prediction
+            prediction = await self._generate_engagement_prediction_with_rag(rag_context)
+            
+            processing_time = int((time.time() - start_time) * 1000)
+            self.logger.log_ai_operation(
+                operation="engagement_prediction",
+                model=settings.openai_model,
+                tokens_used=prediction.get("tokens_used", 0),
+                duration_ms=processing_time,
+                success=True
+            )
+            
+            return prediction
+            
+        except Exception as e:
+            self.logger.log_error(e, {"operation": "predict_engagement"})
+            raise AIServiceException(f"Failed to predict engagement: {str(e)}")
+    
+    async def get_user_suggestion_history(
+        self,
+        user_id: str,
+        limit: int = 10,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """Get user's suggestion history"""
+        try:
+            # This would typically query a database for user's suggestion history
+            # For now, return a placeholder
+            return {
+                "user_id": user_id,
+                "suggestions": [],
+                "total": 0,
+                "limit": limit,
+                "offset": offset
+            }
+        except Exception as e:
+            self.logger.log_error(e, {"operation": "get_user_suggestion_history"})
+            raise AIServiceException(f"Failed to retrieve suggestion history: {str(e)}")
+    
+    # Private helper methods
+    
+    def _prepare_competitor_context(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Prepare competitor analysis results for RAG context"""
+        context_documents = []
+        
+        for competitor, data in analysis_results.items():
+            if isinstance(data, dict):
+                context_documents.append({
+                    "content": f"Competitor {competitor}: {str(data)}",
+                    "metadata": {"type": "competitor_analysis", "competitor": competitor}
+                })
+        
+        return context_documents
+    
+    def _build_hashtag_query(
+        self,
+        content: Optional[str],
+        content_type: str,
+        platform: str,
+        target_audience: Optional[str],
+        goals: List[str]
+    ) -> str:
+        """Build query for hashtag generation"""
+        query_parts = [
+            f"Generate hashtag suggestions for {content_type} content on {platform}",
+            f"Content: {content[:200] if content else 'No content provided'}",
+            f"Target audience: {target_audience or 'General audience'}",
+            f"Goals: {', '.join(goals) if goals else 'General engagement'}"
+        ]
+        return ". ".join(query_parts)
+    
+    def _build_caption_query(
+        self,
+        content: Optional[str],
+        content_type: str,
+        platform: str,
+        tone: str,
+        target_audience: Optional[str],
+        goals: List[str]
+    ) -> str:
+        """Build query for caption generation"""
+        query_parts = [
+            f"Generate caption suggestions for {content_type} content on {platform}",
+            f"Tone: {tone}",
+            f"Content: {content[:200] if content else 'No content provided'}",
+            f"Target audience: {target_audience or 'General audience'}",
+            f"Goals: {', '.join(goals) if goals else 'General engagement'}"
+        ]
+        return ". ".join(query_parts)
+    
+    async def _retrieve_hashtag_context(
+        self,
+        content_type: str,
+        platform: str,
+        target_audience: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Retrieve relevant context for hashtag generation"""
+        # This would typically query the vector store for relevant hashtag data
+        # For now, return empty list
+        return []
+    
+    async def _retrieve_caption_context(
+        self,
+        content_type: str,
+        platform: str,
+        tone: str,
+        target_audience: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Retrieve relevant context for caption generation"""
+        # This would typically query the vector store for relevant caption data
+        return []
+    
+    async def _retrieve_posting_time_context(
+        self,
+        platform: str,
+        content_type: str,
+        target_audience: Optional[str],
+        user_id: str
+    ) -> List[Dict[str, Any]]:
+        """Retrieve relevant context for posting time suggestions"""
+        # This would typically query the vector store for posting time data
+        return []
+    
+    async def _retrieve_content_ideas_context(
+        self,
+        content_type: str,
+        platform: str,
+        target_audience: Optional[str],
+        goals: List[str]
+    ) -> List[Dict[str, Any]]:
+        """Retrieve relevant context for content ideas generation"""
+        # This would typically query the vector store for content ideas data
+        return []
+    
+    async def _retrieve_engagement_context(
+        self,
+        content_type: str,
+        platform: str,
+        target_audience: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Retrieve relevant context for engagement prediction"""
+        # This would typically query the vector store for engagement data
+        return []
+    
+    async def _generate_insights_with_rag(self, rag_context: RAGContext) -> Dict[str, Any]:
+        """Generate insights using RAG"""
+        # This would implement the actual RAG pipeline
+        # For now, return a placeholder
+        return {
+            "insights": "AI-generated insights based on competitor analysis",
+            "tokens_used": 1000
+        }
+    
+    async def _generate_hashtag_suggestions_with_rag(
+        self, 
+        rag_context: RAGContext, 
+        max_suggestions: int
+    ) -> Dict[str, Any]:
+        """Generate hashtag suggestions using RAG"""
+        # This would implement the actual RAG pipeline for hashtags
+        return {
+            "hashtags": [
+                {
+                    "hashtag": "#example",
+                    "popularity_score": 0.8,
+                    "relevance_score": 0.9,
+                    "competition_level": "medium",
+                    "estimated_reach": 10000,
+                    "category": "general"
+                }
+            ],
+            "tokens_used": 500
+        }
+    
+    async def _generate_caption_suggestions_with_rag(
+        self, 
+        rag_context: RAGContext, 
+        max_suggestions: int
+    ) -> Dict[str, Any]:
+        """Generate caption suggestions using RAG"""
+        # This would implement the actual RAG pipeline for captions
+        return {
+            "captions": [
+                {
+                    "caption": "Example caption suggestion",
+                    "tone": "professional",
+                    "length": 50,
+                    "engagement_potential": 0.8,
+                    "readability_score": 0.9,
+                    "emoji_count": 2
+                }
+            ],
+            "tokens_used": 800
+        }
+    
+    async def _generate_posting_time_suggestions_with_rag(
+        self, 
+        rag_context: RAGContext
+    ) -> Dict[str, Any]:
+        """Generate posting time suggestions using RAG"""
+        # This would implement the actual RAG pipeline for posting times
+        return {
+            "optimal_times": ["6:00 PM", "8:00 PM"],
+            "best_days": ["Tuesday", "Thursday"],
+            "frequency": "2-3 times per week",
+            "reasoning": "Based on audience activity patterns",
+            "tokens_used": 300
+        }
+    
+    async def _generate_content_ideas_with_rag(
+        self, 
+        rag_context: RAGContext, 
+        max_suggestions: int
+    ) -> Dict[str, Any]:
+        """Generate content ideas using RAG"""
+        # This would implement the actual RAG pipeline for content ideas
+        return {
+            "content_ideas": [
+                {
+                    "title": "Example Content Idea",
+                    "description": "A creative content idea description",
+                    "format": "post",
+                    "estimated_engagement": 0.7,
+                    "difficulty": "medium",
+                    "time_to_create": "2-3 hours",
+                    "trending_potential": 0.6
+                }
+            ],
+            "tokens_used": 1200
+        }
+    
+    async def _generate_engagement_prediction_with_rag(
+        self, 
+        rag_context: RAGContext
+    ) -> Dict[str, Any]:
+        """Generate engagement prediction using RAG"""
+        # This would implement the actual RAG pipeline for engagement prediction
+        return {
+            "predicted_likes": 1000,
+            "predicted_comments": 50,
+            "predicted_shares": 25,
+            "predicted_reach": 5000,
+            "confidence_score": 0.8,
+            "tokens_used": 400
+        }

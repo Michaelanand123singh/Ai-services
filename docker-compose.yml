@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  ai-service:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      - AI_SERVICE_NAME=bloocube-ai-service
+      - AI_SERVICE_VERSION=1.0.0
+      - AI_SERVICE_PORT=8001
+      - AI_SERVICE_HOST=0.0.0.0
+      - MONGODB_URL=mongodb://mongo:27017/bloocube
+      - REDIS_URL=redis://redis:6379/0
+      - POSTGRES_URL=postgresql://postgres:password@postgres:5432/bloocube
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT}
+      - PINECONE_INDEX_NAME=bloocube-embeddings
+      - BACKEND_SERVICE_URL=http://backend:3000
+      - JWT_SECRET=${JWT_SECRET}
+      - LOG_LEVEL=INFO
+    depends_on:
+      - mongo
+      - redis
+      - postgres
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - bloocube-network
+
+  mongo:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=bloocube
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - bloocube-network
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bloocube-network
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=bloocube
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bloocube-network
+
+  # Optional: Vector database services
+  weaviate:
+    image: semitechnologies/weaviate:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - QUERY_DEFAULTS_LIMIT=25
+      - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
+      - PERSISTENCE_DATA_PATH=/var/lib/weaviate
+      - DEFAULT_VECTORIZER_MODULE=none
+      - ENABLE_MODULES=text2vec-openai,text2vec-cohere,text2vec-huggingface
+      - CLUSTER_HOSTNAME=node1
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    networks:
+      - bloocube-network
+
+volumes:
+  mongo_data:
+  redis_data:
+  postgres_data:
+  weaviate_data:
+
+networks:
+  bloocube-network:
+    driver: bridge

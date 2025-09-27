@@ -1,0 +1,188 @@
+"""
+Main FastAPI application for Bloocube AI Service
+"""
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
+import time
+import uvicorn
+from contextlib import asynccontextmanager
+
+from src.core.config import settings
+from src.core.logger import setup_logging, ai_logger
+from src.core.exceptions import AIServiceException, get_http_status_from_error
+from src.api import health, competitor, suggestions
+
+# Setup logging
+setup_logging()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager"""
+    # Startup
+    ai_logger.logger.info("Starting Bloocube AI Service", version=settings.ai_service_version)
+    
+    # Initialize services here if needed
+    # await initialize_services()
+    
+    yield
+    
+    # Shutdown
+    ai_logger.logger.info("Shutting down Bloocube AI Service")
+
+
+# Create FastAPI application
+app = FastAPI(
+    title=settings.ai_service_name,
+    version=settings.ai_service_version,
+    description="AI-powered microservice for social media analysis, competitor research, content suggestions, and brand-creator matchmaking",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this properly for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add trusted host middleware
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*"]  # Configure this properly for production
+)
+
+
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all requests and responses"""
+    start_time = time.time()
+    
+    # Log request
+    ai_logger.logger.info(
+        "Request started",
+        method=request.method,
+        url=str(request.url),
+        client_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+    
+    # Process request
+    response = await call_next(request)
+    
+    # Log response
+    process_time = time.time() - start_time
+    ai_logger.logger.info(
+        "Request completed",
+        method=request.method,
+        url=str(request.url),
+        status_code=response.status_code,
+        process_time=process_time
+    )
+    
+    return response
+
+
+# Global exception handler
+@app.exception_handler(AIServiceException)
+async def ai_service_exception_handler(request: Request, exc: AIServiceException):
+    """Handle AI service exceptions"""
+    ai_logger.log_error(exc, {
+        "url": str(request.url),
+        "method": request.method,
+        "error_code": exc.error_code
+    })
+    
+    return JSONResponse(
+        status_code=get_http_status_from_error(exc),
+        content={
+            "error": exc.error_code,
+            "message": exc.message,
+            "details": exc.details
+        }
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTP exceptions"""
+    ai_logger.logger.warning(
+        "HTTP exception",
+        status_code=exc.status_code,
+        detail=exc.detail,
+        url=str(request.url),
+        method=request.method
+    )
+    
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": "HTTP_ERROR", "message": exc.detail}
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle general exceptions"""
+    ai_logger.log_error(exc, {
+        "url": str(request.url),
+        "method": request.method,
+        "exception_type": type(exc).__name__
+    })
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "INTERNAL_SERVER_ERROR",
+            "message": "An unexpected error occurred"
+        }
+    )
+
+
+# Include routers
+app.include_router(health.router)
+app.include_router(competitor.router)
+app.include_router(suggestions.router)
+
+
+# Root endpoint
+@app.get("/")
+async def root():
+    """Root endpoint with service information"""
+    return {
+        "service": settings.ai_service_name,
+        "version": settings.ai_service_version,
+        "status": "running",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+
+# Metrics endpoint (for Prometheus)
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    # This would typically include actual metrics
+    # For now, return basic service info
+    return {
+        "service_name": settings.ai_service_name,
+        "version": settings.ai_service_version,
+        "uptime": time.time()  # This should be actual uptime
+    }
+
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "src.main:app",
+        host=settings.ai_service_host,
+        port=settings.ai_service_port,
+        reload=True,
+        log_level=settings.log_level.lower()
+    )
