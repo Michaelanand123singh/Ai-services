@@ -331,6 +331,18 @@ API_ENDPOINTS = {
     "CAPTION_SUGGESTIONS": "/ai/suggestions/captions",
     "POSTING_TIMES": "/ai/suggestions/posting-times",
     "CONTENT_IDEAS": "/ai/suggestions/content-ideas",
+    "MATCHMAKING": "/ai/matchmaking/brand-creator",
+    "COMPATIBILITY": "/ai/matchmaking/compatibility",
+    "TRENDING_CREATORS": "/ai/matchmaking/trending-creators",
+    "TREND_ANALYSIS": "/ai/trends/analyze",
+    "HASHTAG_TRENDS": "/ai/trends/hashtag",
+    "TRENDING_HASHTAGS": "/ai/trends/trending-hashtags",
+    "TRENDING_CONTENT": "/ai/trends/trending-content",
+    "AUDIENCE_INSIGHTS": "/ai/trends/audience-insights",
+    "CONTENT_PREDICTION": "/ai/predictions/content",
+    "CAMPAIGN_PREDICTION": "/ai/predictions/campaign",
+    "CREATOR_PREDICTION": "/ai/predictions/creator",
+    "HISTORICAL_PERFORMANCE": "/ai/predictions/historical-performance",
     "METRICS": "/metrics"
 }
 

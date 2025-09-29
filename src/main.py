@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from src.core.config import settings
 from src.core.logger import setup_logging, ai_logger
 from src.core.exceptions import AIServiceException, get_http_status_from_error
-from src.api import health, competitor, suggestions
+from src.api import health, competitor, suggestions, matchmaking, trends, predictions
 
 # Setup logging
 setup_logging()
@@ -150,6 +150,9 @@ async def general_exception_handler(request: Request, exc: Exception):
 app.include_router(health.router)
 app.include_router(competitor.router)
 app.include_router(suggestions.router)
+app.include_router(matchmaking.router)
+app.include_router(trends.router)
+app.include_router(predictions.router)
 
 
 # Root endpoint

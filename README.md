@@ -170,6 +170,20 @@ docker run -p 8001:8001 --env-file .env bloocube-ai-service
 #### Matchmaking
 - `POST /ai/matchmaking/brand-creator` - Match brands with creators
 - `GET /ai/matchmaking/compatibility/{brand_id}/{creator_id}` - Get compatibility score
+- `GET /ai/matchmaking/trending-creators` - Get trending creators
+
+#### Trend Analysis
+- `POST /ai/trends/analyze` - Analyze trends across platforms
+- `POST /ai/trends/hashtag` - Analyze specific hashtag trends
+- `GET /ai/trends/trending-hashtags` - Get trending hashtags
+- `GET /ai/trends/trending-content` - Get trending content types
+- `GET /ai/trends/audience-insights` - Get audience trend insights
+
+#### Performance Prediction
+- `POST /ai/predictions/content` - Predict content performance
+- `POST /ai/predictions/campaign` - Predict campaign performance
+- `POST /ai/predictions/creator` - Predict creator performance
+- `GET /ai/predictions/historical-performance/{user_id}` - Get historical performance data
 
 ### Request/Response Examples
 
