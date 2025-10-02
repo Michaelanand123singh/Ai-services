@@ -1,5 +1,6 @@
 """
-Competitor analysis API endpoints
+Competitor analysis API endpoints - ANALYSIS ONLY
+Backend handles data collection, AI services focus on analysis and insights
 """
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -13,24 +14,32 @@ from src.core.exceptions import (
     InsufficientDataError,
     ValidationError
 )
-from src.services.competitor_service import CompetitorAnalysisService
 from src.services.rag_service import RAGService
+from src.models.llm_client import LLMClient
 
 router = APIRouter(prefix="/ai/competitor-analysis", tags=["competitor-analysis"])
 
 
+class CompetitorData(BaseModel):
+    """Competitor data structure received from backend"""
+    platform: str
+    username: str
+    profile_url: str
+    profile_metrics: Dict[str, Any]
+    content_analysis: Dict[str, Any]
+    engagement_metrics: Dict[str, Any]
+    recent_posts: List[Dict[str, Any]]
+    data_quality: Dict[str, Any]
+
+
 class CompetitorAnalysisRequest(BaseModel):
-    """Request model for competitor analysis"""
+    """Request model for competitor analysis - receives pre-collected data"""
     user_id: str = Field(..., description="User ID requesting the analysis")
     campaign_id: Optional[str] = Field(None, description="Campaign ID if analysis is for a specific campaign")
-    competitors: List[str] = Field(..., description="List of competitor usernames/handles to analyze")
-    platforms: List[str] = Field(..., description="Social media platforms to analyze")
+    competitors_data: List[CompetitorData] = Field(..., description="Pre-collected competitor data from backend")
     analysis_type: str = Field(default="comprehensive", description="Type of analysis to perform")
-    include_content_analysis: bool = Field(default=True, description="Include content analysis")
-    include_engagement_analysis: bool = Field(default=True, description="Include engagement analysis")
-    include_audience_analysis: bool = Field(default=True, description="Include audience analysis")
-    time_period_days: int = Field(default=30, description="Time period for analysis in days")
-    max_posts_per_competitor: int = Field(default=50, description="Maximum posts to analyze per competitor")
+    analysis_options: Dict[str, bool] = Field(default={}, description="Analysis options")
+    collected_at: str = Field(..., description="When the data was collected")
 
 
 class CompetitorAnalysisResponse(BaseModel):
