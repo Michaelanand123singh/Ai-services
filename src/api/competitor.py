@@ -15,7 +15,8 @@ from src.core.exceptions import (
     ValidationError
 )
 from src.services.rag_service import RAGService
-from src.models.llm_client import LLMClient
+from src.models.multi_llm_client import MultiLLMClient
+from src.core.auth import verify_api_key, get_service_info
 
 router = APIRouter(prefix="/ai/competitor-analysis", tags=["competitor-analysis"])
 
@@ -118,54 +119,61 @@ def get_rag_service() -> RAGService:
     return RAGService()
 
 
+def get_multi_llm_client() -> MultiLLMClient:
+    """Get Multi-LLM client instance"""
+    return MultiLLMClient()
+
+
 @router.post("/", response_model=CompetitorAnalysisResponse)
 async def analyze_competitors(
     request: CompetitorAnalysisRequest,
     background_tasks: BackgroundTasks,
-    competitor_service: CompetitorAnalysisService = Depends(get_competitor_service),
-    rag_service: RAGService = Depends(get_rag_service)
+    api_key: str = Depends(verify_api_key),
+    rag_service: RAGService = Depends(get_rag_service),
+    llm_client: MultiLLMClient = Depends(get_multi_llm_client)
 ):
     """
-    Analyze competitor profiles and strategies
+    Analyze competitor data and generate AI insights
     
-    This endpoint performs comprehensive analysis of competitor social media profiles,
-    including content analysis, engagement patterns, audience demographics, and strategic insights.
+    This endpoint receives pre-collected competitor data from the backend
+    and focuses purely on AI analysis and insight generation.
     """
     start_time = time.time()
     log_api_request("/ai/competitor-analysis", "POST", request.user_id)
     
     try:
         # Validate request
-        if not request.competitors:
-            raise ValidationError("competitors", request.competitors, "At least one competitor must be specified")
-        
-        if not request.platforms:
-            raise ValidationError("platforms", request.platforms, "At least one platform must be specified")
-        
-        if request.time_period_days <= 0 or request.time_period_days > 365:
-            raise ValidationError("time_period_days", request.time_period_days, "Time period must be between 1 and 365 days")
+        if not request.competitors_data:
+            raise ValidationError("competitors_data", request.competitors_data, "Competitor data is required")
         
         # Check feature flag
         if not settings.enable_competitor_analysis:
             raise HTTPException(status_code=503, detail="Competitor analysis is currently disabled")
         
-        # Perform competitor analysis
-        analysis_results = await competitor_service.analyze_competitors(
-            user_id=request.user_id,
-            campaign_id=request.campaign_id,
-            competitors=request.competitors,
-            platforms=request.platforms,
-            analysis_type=request.analysis_type,
-            include_content_analysis=request.include_content_analysis,
-            include_engagement_analysis=request.include_engagement_analysis,
-            include_audience_analysis=request.include_audience_analysis,
-            time_period_days=request.time_period_days,
-            max_posts_per_competitor=request.max_posts_per_competitor
+        # Generate analysis ID
+        analysis_id = f"comp_analysis_{int(time.time())}_{request.user_id}"
+        
+        # Step 1: Analyze individual competitors
+        competitor_insights = []
+        for competitor_data in request.competitors_data:
+            insights = await analyze_single_competitor(
+                competitor_data, llm_client, rag_service
+            )
+            competitor_insights.append(insights)
+        
+        # Step 2: Generate market-level insights
+        market_insights = await generate_market_insights(
+            request.competitors_data, llm_client, rag_service
         )
         
-        # Generate AI-powered insights using RAG
-        ai_insights = await rag_service.generate_competitor_insights(
-            analysis_results=analysis_results,
+        # Step 3: Analyze competitive landscape
+        competitive_landscape = await analyze_competitive_landscape(
+            request.competitors_data, llm_client, rag_service
+        )
+        
+        # Step 4: Generate strategic recommendations
+        strategic_recommendations = await generate_strategic_recommendations(
+            competitor_insights, market_insights, competitive_landscape, llm_client
             user_context={
                 "user_id": request.user_id,
                 "campaign_id": request.campaign_id,

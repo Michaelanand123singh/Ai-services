@@ -6,6 +6,7 @@ pydantic-settings>=2.1.0
 
 # AI and ML libraries (core)
 openai>=1.6.1,<2.0.0
+google-generativeai>=0.3.0
 langchain>=0.0.350
 langchain-openai>=0.0.2
 langchain-community>=0.0.10

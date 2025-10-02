@@ -16,15 +16,30 @@ class Settings(BaseSettings):
     ai_service_port: int = Field(default=8001, env="AI_SERVICE_PORT")
     ai_service_host: str = Field(default="0.0.0.0", env="AI_SERVICE_HOST")
     
-    # Database Configuration
-    mongodb_url: str = Field(default="mongodb://localhost:27017/bloocube", env="MONGODB_URL")
-    redis_url: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
-    postgres_url: str = Field(default="postgresql://user:password@localhost:5432/bloocube", env="POSTGRES_URL")
+    # Database Configuration (OPTIONAL - for stateless mode, comment these out)
+    mongodb_url: Optional[str] = Field(default=None, env="MONGODB_URL")
+    redis_url: Optional[str] = Field(default=None, env="REDIS_URL")
+    postgres_url: Optional[str] = Field(default=None, env="POSTGRES_URL")
     
-    # AI Model Configuration
-    openai_api_key: str = Field(env="OPENAI_API_KEY")
+    # AI Model Configuration - Multi-Provider Support
+    # Primary AI Provider (can be dynamically switched)
+    primary_ai_provider: str = Field(default="openai", env="PRIMARY_AI_PROVIDER")
+    
+    # OpenAI Configuration
+    openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-4-turbo-preview", env="OPENAI_MODEL")
+    openai_organization: Optional[str] = Field(default=None, env="OPENAI_ORGANIZATION")
+    
+    # Google Gemini Configuration
+    gemini_api_key: Optional[str] = Field(default=None, env="GEMINI_API_KEY")
+    gemini_model: str = Field(default="gemini-1.5-pro", env="GEMINI_MODEL")
+    
+    # Embedding Models
     embedding_model: str = Field(default="text-embedding-3-large", env="EMBEDDING_MODEL")
+    
+    # Fallback Configuration
+    enable_fallback: bool = Field(default=True, env="ENABLE_AI_FALLBACK")
+    fallback_provider: str = Field(default="gemini", env="FALLBACK_AI_PROVIDER")
     
     # Vector Database Configuration
     pinecone_api_key: Optional[str] = Field(default=None, env="PINECONE_API_KEY")
@@ -35,27 +50,30 @@ class Settings(BaseSettings):
     faiss_index_path: str = Field(default="./data/faiss_index", env="FAISS_INDEX_PATH")
     chroma_persist_directory: str = Field(default="./data/chroma_db", env="CHROMA_PERSIST_DIRECTORY")
     
-    # Social Media API Keys
-    twitter_api_key: Optional[str] = Field(default=None, env="TWITTER_API_KEY")
-    twitter_api_secret: Optional[str] = Field(default=None, env="TWITTER_API_SECRET")
-    twitter_access_token: Optional[str] = Field(default=None, env="TWITTER_ACCESS_TOKEN")
-    twitter_access_secret: Optional[str] = Field(default=None, env="TWITTER_ACCESS_SECRET")
+    # Social Media API Keys (REMOVED - Backend handles data collection)
+    # twitter_api_key: Optional[str] = Field(default=None, env="TWITTER_API_KEY")
+    # twitter_api_secret: Optional[str] = Field(default=None, env="TWITTER_API_SECRET")
+    # twitter_access_token: Optional[str] = Field(default=None, env="TWITTER_ACCESS_TOKEN")
+    # twitter_access_secret: Optional[str] = Field(default=None, env="TWITTER_ACCESS_SECRET")
+    # 
+    # instagram_username: Optional[str] = Field(default=None, env="INSTAGRAM_USERNAME")
+    # instagram_password: Optional[str] = Field(default=None, env="INSTAGRAM_PASSWORD")
+    # 
+    # youtube_api_key: Optional[str] = Field(default=None, env="YOUTUBE_API_KEY")
+    # facebook_app_id: Optional[str] = Field(default=None, env="FACEBOOK_APP_ID")
+    # facebook_app_secret: Optional[str] = Field(default=None, env="FACEBOOK_APP_SECRET")
+    # linkedin_client_id: Optional[str] = Field(default=None, env="LINKEDIN_CLIENT_ID")
+    # linkedin_client_secret: Optional[str] = Field(default=None, env="LINKEDIN_CLIENT_SECRET")
     
-    instagram_username: Optional[str] = Field(default=None, env="INSTAGRAM_USERNAME")
-    instagram_password: Optional[str] = Field(default=None, env="INSTAGRAM_PASSWORD")
-    
-    youtube_api_key: Optional[str] = Field(default=None, env="YOUTUBE_API_KEY")
-    facebook_app_id: Optional[str] = Field(default=None, env="FACEBOOK_APP_ID")
-    facebook_app_secret: Optional[str] = Field(default=None, env="FACEBOOK_APP_SECRET")
-    linkedin_client_id: Optional[str] = Field(default=None, env="LINKEDIN_CLIENT_ID")
-    linkedin_client_secret: Optional[str] = Field(default=None, env="LINKEDIN_CLIENT_SECRET")
-    
-    # Backend Service Configuration
-    backend_service_url: str = Field(default="http://localhost:3000", env="BACKEND_SERVICE_URL")
+    # Backend Service Configuration (CRITICAL for stateless mode)
+    backend_service_url: str = Field(default="http://localhost:5000", env="BACKEND_SERVICE_URL")
     backend_api_key: Optional[str] = Field(default=None, env="BACKEND_API_KEY")
     
-    # Security Configuration
-    jwt_secret: str = Field(env="JWT_SECRET")
+    # API Authentication (for service-to-service communication)
+    ai_service_api_key: Optional[str] = Field(default=None, env="AI_SERVICE_API_KEY")
+    
+    # Security Configuration (OPTIONAL - for stateless mode, JWT not needed)
+    jwt_secret: Optional[str] = Field(default=None, env="JWT_SECRET")
     jwt_algorithm: str = Field(default="HS256", env="JWT_ALGORITHM")
     jwt_expire_minutes: int = Field(default=60, env="JWT_EXPIRE_MINUTES")
     
@@ -156,25 +174,94 @@ CONTENT_TYPES = {
     "article": {"max_length": 3000, "hashtag_limit": 5}
 }
 
-# AI Model configurations
+# AI Model configurations - Multi-Provider Support
 AI_MODELS = {
-    "gpt-4-turbo-preview": {
-        "max_tokens": 4000,
-        "cost_per_1k_tokens": 0.01,
-        "supports_functions": True
+    # OpenAI Models
+    "openai": {
+        "gpt-4-turbo-preview": {
+            "provider": "openai",
+            "max_tokens": 4000,
+            "cost_per_1k_tokens": 0.01,
+            "supports_functions": True,
+            "context_window": 128000
+        },
+        "gpt-4": {
+            "provider": "openai",
+            "max_tokens": 4000,
+            "cost_per_1k_tokens": 0.03,
+            "supports_functions": True,
+            "context_window": 8192
+        },
+        "gpt-3.5-turbo": {
+            "provider": "openai",
+            "max_tokens": 4000,
+            "cost_per_1k_tokens": 0.002,
+            "supports_functions": True,
+            "context_window": 16385
+        }
     },
-    "gpt-3.5-turbo": {
-        "max_tokens": 4000,
-        "cost_per_1k_tokens": 0.002,
-        "supports_functions": True
+    # Google Gemini Models
+    "gemini": {
+        "gemini-1.5-pro": {
+            "provider": "gemini",
+            "max_tokens": 8192,
+            "cost_per_1k_tokens": 0.0,  # Free tier
+            "supports_functions": True,
+            "context_window": 2000000  # 2M tokens
+        },
+        "gemini-1.5-flash": {
+            "provider": "gemini",
+            "max_tokens": 8192,
+            "cost_per_1k_tokens": 0.0,  # Free tier
+            "supports_functions": True,
+            "context_window": 1000000  # 1M tokens
+        },
+        "gemini-pro": {
+            "provider": "gemini",
+            "max_tokens": 2048,
+            "cost_per_1k_tokens": 0.0,  # Free tier
+            "supports_functions": False,
+            "context_window": 32768
+        }
     },
-    "text-embedding-3-large": {
-        "dimensions": 3072,
-        "cost_per_1k_tokens": 0.00013
+    # Embedding Models
+    "embeddings": {
+        "text-embedding-3-large": {
+            "provider": "openai",
+            "dimensions": 3072,
+            "cost_per_1k_tokens": 0.00013
+        },
+        "text-embedding-3-small": {
+            "provider": "openai",
+            "dimensions": 1536,
+            "cost_per_1k_tokens": 0.00002
+        }
+    }
+}
+
+# AI Provider configurations
+AI_PROVIDERS = {
+    "openai": {
+        "name": "OpenAI",
+        "description": "OpenAI GPT models with advanced capabilities",
+        "api_base": "https://api.openai.com/v1",
+        "requires_api_key": True,
+        "free_tier": False,
+        "rate_limits": {
+            "requests_per_minute": 3500,
+            "tokens_per_minute": 90000
+        }
     },
-    "text-embedding-3-small": {
-        "dimensions": 1536,
-        "cost_per_1k_tokens": 0.00002
+    "gemini": {
+        "name": "Google Gemini",
+        "description": "Google's Gemini models with free tier support",
+        "api_base": "https://generativelanguage.googleapis.com/v1beta",
+        "requires_api_key": True,
+        "free_tier": True,
+        "rate_limits": {
+            "requests_per_minute": 60,
+            "requests_per_day": 1500
+        }
     }
 }
 

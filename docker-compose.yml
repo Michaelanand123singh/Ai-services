@@ -25,13 +25,25 @@ services:
       - NODE_ENV=development
       - ENVIRONMENT=development
       
-      # Database Configuration
-      - MONGODB_URL=mongodb://mongodb:27017/bloocube
-      - REDIS_URL=redis://redis:6379/0
+      # Database Configuration (DISABLED for stateless mode)
+      # - MONGODB_URL=mongodb://mongodb:27017/bloocube
+      # - REDIS_URL=redis://redis:6379/0
       
-      # AI Model Configuration (use your actual keys)
+      # AI Model Configuration (Multi-Provider Support)
+      - PRIMARY_AI_PROVIDER=${PRIMARY_AI_PROVIDER:-openai}
+      - FALLBACK_AI_PROVIDER=${FALLBACK_AI_PROVIDER:-gemini}
+      - ENABLE_AI_FALLBACK=${ENABLE_AI_FALLBACK:-true}
+      
+      # OpenAI Configuration
       - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key}
-      - OPENAI_MODEL=gpt-4-turbo-preview
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4-turbo-preview}
+      - OPENAI_ORGANIZATION=${OPENAI_ORGANIZATION:-}
+      
+      # Google Gemini Configuration
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-your-gemini-api-key}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-pro}
+      
+      # Embedding Models
       - EMBEDDING_MODEL=text-embedding-3-large
       
       # Vector Database
@@ -43,15 +55,18 @@ services:
       - BACKEND_SERVICE_URL=http://host.docker.internal:5000
       - BACKEND_API_KEY=${BACKEND_API_KEY:-your-backend-api-key}
       
-      # Security Configuration
-      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret-here}
-      - JWT_ALGORITHM=HS256
-      - JWT_EXPIRE_MINUTES=60
+      # API Authentication (for stateless mode)
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-your-ai-service-api-key}
       
-      # Social Media APIs
-      - TWITTER_API_KEY=${TWITTER_API_KEY:-your-twitter-api-key}
-      - TWITTER_API_SECRET=${TWITTER_API_SECRET:-your-twitter-api-secret}
-      - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN:-your-twitter-bearer-token}
+      # Security Configuration (DISABLED for stateless mode)
+      # - JWT_SECRET=${JWT_SECRET:-your-jwt-secret-here}
+      # - JWT_ALGORITHM=HS256
+      # - JWT_EXPIRE_MINUTES=60
+      
+      # Social Media APIs (REMOVED - Backend handles data collection)
+      # - TWITTER_API_KEY=${TWITTER_API_KEY:-your-twitter-api-key}
+      # - TWITTER_API_SECRET=${TWITTER_API_SECRET:-your-twitter-api-secret}
+      # - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN:-your-twitter-bearer-token}
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-your-youtube-api-key}
       - FACEBOOK_APP_ID=${FACEBOOK_APP_ID:-your-facebook-app-id}
       - FACEBOOK_APP_SECRET=${FACEBOOK_APP_SECRET:-your-facebook-app-secret}
@@ -93,9 +108,9 @@ services:
       - ./data:/app/data
       - ./tests:/app/tests
     
-    depends_on:
-      - mongodb
-      - redis
+    # depends_on: (REMOVED - stateless mode doesn't need databases)
+    #   - mongodb
+    #   - redis
     
     networks:
       - bloocube-network
@@ -110,50 +125,47 @@ services:
       start_period: 40s
 
   # =============================================================================
-  # MONGODB DATABASE
+  # DATABASE SERVICES (DISABLED for stateless AI services)
   # =============================================================================
-  mongodb:
-    image: mongo:7.0
-    container_name: bloocube-mongodb
-    ports:
-      - "27017:27017"
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=password123
-      - MONGO_INITDB_DATABASE=bloocube
-    volumes:
-      - mongodb_data:/data/db
-      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-    networks:
-      - bloocube-network
-    restart: unless-stopped
-    
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # mongodb:
+  #   image: mongo:7.0
+  #   container_name: bloocube-mongodb
+  #   ports:
+  #     - "27017:27017"
+  #   environment:
+  #     - MONGO_INITDB_ROOT_USERNAME=admin
+  #     - MONGO_INITDB_ROOT_PASSWORD=password123
+  #     - MONGO_INITDB_DATABASE=bloocube
+  #   volumes:
+  #     - mongodb_data:/data/db
+  #     - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+  #   networks:
+  #     - bloocube-network
+  #   restart: unless-stopped
+  #   
+  #   healthcheck:
+  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
-  # =============================================================================
-  # REDIS CACHE
-  # =============================================================================
-  redis:
-    image: redis:7.2-alpine
-    container_name: bloocube-redis
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --requirepass password123
-    volumes:
-      - redis_data:/data
-    networks:
-      - bloocube-network
-    restart: unless-stopped
-    
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # redis:
+  #   image: redis:7.2-alpine
+  #   container_name: bloocube-redis
+  #   ports:
+  #     - "6379:6379"
+  #   command: redis-server --appendonly yes --requirepass password123
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - bloocube-network
+  #   restart: unless-stopped
+  #   
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
   # =============================================================================
   # CELERY WORKER (Background Tasks)
