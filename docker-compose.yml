@@ -1,93 +1,315 @@
+# =============================================================================
+# BLOOCUBE AI SERVICES - DOCKER COMPOSE FOR LOCAL DEVELOPMENT & TESTING
+# =============================================================================
+
 version: '3.8'
 
 services:
+  # =============================================================================
+  # AI SERVICES APPLICATION
+  # =============================================================================
   ai-service:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: bloocube-ai-service
     ports:
       - "8001:8001"
     environment:
+      # Service Configuration
       - AI_SERVICE_NAME=bloocube-ai-service
       - AI_SERVICE_VERSION=1.0.0
       - AI_SERVICE_PORT=8001
       - AI_SERVICE_HOST=0.0.0.0
-      - MONGODB_URL=mongodb://mongo:27017/bloocube
+      - NODE_ENV=development
+      - ENVIRONMENT=development
+      
+      # Database Configuration
+      - MONGODB_URL=mongodb://mongodb:27017/bloocube
       - REDIS_URL=redis://redis:6379/0
-      - POSTGRES_URL=postgresql://postgres:password@postgres:5432/bloocube
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - PINECONE_API_KEY=${PINECONE_API_KEY}
-      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT}
+      
+      # AI Model Configuration (use your actual keys)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key}
+      - OPENAI_MODEL=gpt-4-turbo-preview
+      - EMBEDDING_MODEL=text-embedding-3-large
+      
+      # Vector Database
+      - PINECONE_API_KEY=${PINECONE_API_KEY:-your-pinecone-api-key}
+      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT:-your-pinecone-environment}
       - PINECONE_INDEX_NAME=bloocube-embeddings
-      - BACKEND_SERVICE_URL=http://backend:3000
-      - JWT_SECRET=${JWT_SECRET}
-      - LOG_LEVEL=INFO
-    depends_on:
-      - mongo
-      - redis
-      - postgres
+      
+      # Backend Service Integration
+      - BACKEND_SERVICE_URL=http://host.docker.internal:5000
+      - BACKEND_API_KEY=${BACKEND_API_KEY:-your-backend-api-key}
+      
+      # Security Configuration
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret-here}
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRE_MINUTES=60
+      
+      # Social Media APIs
+      - TWITTER_API_KEY=${TWITTER_API_KEY:-your-twitter-api-key}
+      - TWITTER_API_SECRET=${TWITTER_API_SECRET:-your-twitter-api-secret}
+      - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN:-your-twitter-bearer-token}
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-your-youtube-api-key}
+      - FACEBOOK_APP_ID=${FACEBOOK_APP_ID:-your-facebook-app-id}
+      - FACEBOOK_APP_SECRET=${FACEBOOK_APP_SECRET:-your-facebook-app-secret}
+      - LINKEDIN_CLIENT_ID=${LINKEDIN_CLIENT_ID:-your-linkedin-client-id}
+      - LINKEDIN_CLIENT_SECRET=${LINKEDIN_CLIENT_SECRET:-your-linkedin-client-secret}
+      
+      # Feature Flags
+      - ENABLE_COMPETITOR_ANALYSIS=true
+      - ENABLE_CONTENT_SUGGESTIONS=true
+      - ENABLE_MATCHMAKING=true
+      - ENABLE_TREND_ANALYSIS=true
+      - ENABLE_PERFORMANCE_PREDICTION=true
+      
+      # Model Parameters
+      - MAX_TOKENS=4000
+      - TEMPERATURE=0.7
+      - TOP_P=0.9
+      
+      # Rate Limiting
+      - RATE_LIMIT_PER_MINUTE=100
+      - RATE_LIMIT_BURST=200
+      
+      # Logging
+      - LOG_LEVEL=DEBUG
+      - LOG_FORMAT=json
+      
+      # Cache Configuration
+      - CACHE_TTL=3600
+      - CACHE_MAX_SIZE=1000
+      
+      # Development Settings
+      - DEBUG=true
+      - VERBOSE_LOGGING=true
+      - MOCK_EXTERNAL_APIS=false
+    
     volumes:
+      - ./src:/app/src
       - ./logs:/app/logs
       - ./data:/app/data
+      - ./tests:/app/tests
+    
+    depends_on:
+      - mongodb
+      - redis
+    
     networks:
       - bloocube-network
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  mongo:
+  # =============================================================================
+  # MONGODB DATABASE
+  # =============================================================================
+  mongodb:
     image: mongo:7.0
+    container_name: bloocube-mongodb
     ports:
       - "27017:27017"
     environment:
       - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_ROOT_PASSWORD=password123
       - MONGO_INITDB_DATABASE=bloocube
     volumes:
-      - mongo_data:/data/db
+      - mongodb_data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     networks:
       - bloocube-network
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
+  # =============================================================================
+  # REDIS CACHE
+  # =============================================================================
   redis:
     image: redis:7.2-alpine
+    container_name: bloocube-redis
     ports:
       - "6379:6379"
+    command: redis-server --appendonly yes --requirepass password123
     volumes:
       - redis_data:/data
     networks:
       - bloocube-network
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  postgres:
-    image: postgres:15-alpine
-    ports:
-      - "5432:5432"
+  # =============================================================================
+  # CELERY WORKER (Background Tasks)
+  # =============================================================================
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: bloocube-celery-worker
+    command: celery -A src.tasks.celery worker --loglevel=info --concurrency=2
     environment:
-      - POSTGRES_DB=bloocube
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - MONGODB_URL=mongodb://mongodb:27017/bloocube
+      - REDIS_URL=redis://redis:6379/0
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key}
+      - LOG_LEVEL=INFO
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./src:/app/src
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      - mongodb
+      - redis
     networks:
       - bloocube-network
+    restart: unless-stopped
 
-  # Optional: Vector database services
-  weaviate:
-    image: semitechnologies/weaviate:latest
-    ports:
-      - "8080:8080"
+  # =============================================================================
+  # CELERY BEAT (Task Scheduler)
+  # =============================================================================
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: bloocube-celery-beat
+    command: celery -A src.tasks.celery beat --loglevel=info
     environment:
-      - QUERY_DEFAULTS_LIMIT=25
-      - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
-      - PERSISTENCE_DATA_PATH=/var/lib/weaviate
-      - DEFAULT_VECTORIZER_MODULE=none
-      - ENABLE_MODULES=text2vec-openai,text2vec-cohere,text2vec-huggingface
-      - CLUSTER_HOSTNAME=node1
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - MONGODB_URL=mongodb://mongodb:27017/bloocube
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
     volumes:
-      - weaviate_data:/var/lib/weaviate
+      - ./src:/app/src
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      - mongodb
+      - redis
     networks:
       - bloocube-network
+    restart: unless-stopped
 
-volumes:
-  mongo_data:
-  redis_data:
-  postgres_data:
-  weaviate_data:
+  # =============================================================================
+  # FLOWER (Celery Monitoring)
+  # =============================================================================
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: bloocube-flower
+    command: celery -A src.tasks.celery flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      - redis
+    networks:
+      - bloocube-network
+    restart: unless-stopped
 
+  # =============================================================================
+  # NGINX (Load Balancer & Reverse Proxy)
+  # =============================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: bloocube-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - ai-service
+    networks:
+      - bloocube-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # PROMETHEUS (Metrics Collection)
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: bloocube-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - bloocube-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # GRAFANA (Metrics Visualization)
+  # =============================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: bloocube-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - bloocube-network
+    restart: unless-stopped
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
 networks:
   bloocube-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

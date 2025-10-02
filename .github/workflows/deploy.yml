@@ -1,0 +1,427 @@
+# =============================================================================
+# BLOOCUBE AI SERVICES - GITHUB ACTIONS CI/CD PIPELINE
+# =============================================================================
+
+name: Deploy AI Services to GCP Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'AI-services/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'AI-services/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      force_deploy:
+        description: 'Force deployment even if tests fail'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION || 'us-central1' }}
+  SERVICE_NAME: bloocube-ai-service
+  REGISTRY: gcr.io
+
+jobs:
+  # =============================================================================
+  # CODE QUALITY & TESTING
+  # =============================================================================
+  test:
+    name: Run Tests & Code Quality Checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./AI-services
+    
+    strategy:
+      matrix:
+        python-version: [3.11]
+    
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest-cov flake8 black isort safety bandit
+    
+    - name: Code formatting check (Black)
+      run: black --check --diff src/ tests/
+    
+    - name: Import sorting check (isort)
+      run: isort --check-only --diff src/ tests/
+    
+    - name: Linting (Flake8)
+      run: flake8 src/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+    
+    - name: Security check (Bandit)
+      run: bandit -r src/ -f json -o bandit-report.json || true
+    
+    - name: Dependency vulnerability check (Safety)
+      run: safety check --json --output safety-report.json || true
+    
+    - name: Run unit tests
+      env:
+        MONGODB_URL: mongodb://localhost:27017/bloocube_test
+        REDIS_URL: redis://localhost:6379/0
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        JWT_SECRET: test-jwt-secret
+        LOG_LEVEL: DEBUG
+      run: |
+        pytest tests/ -v --cov=src --cov-report=xml --cov-report=html --cov-fail-under=80
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./AI-services/coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+    
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-reports
+        path: |
+          AI-services/coverage.xml
+          AI-services/htmlcov/
+          AI-services/bandit-report.json
+          AI-services/safety-report.json
+
+  # =============================================================================
+  # SECURITY SCANNING
+  # =============================================================================
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: test
+    defaults:
+      run:
+        working-directory: ./AI-services
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: './AI-services'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # =============================================================================
+  # BUILD & PUSH DOCKER IMAGE
+  # =============================================================================
+  build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    defaults:
+      run:
+        working-directory: ./AI-services
+    
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+    
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+    
+    - name: Configure Docker to use gcloud as credential helper
+      run: gcloud auth configure-docker
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: ./AI-services
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+    
+    - name: Output image
+      id: image
+      run: |
+        echo "image=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  # =============================================================================
+  # DEPLOY TO STAGING
+  # =============================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.url }}
+    defaults:
+      run:
+        working-directory: ./AI-services
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+    
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+    
+    - name: Deploy to Cloud Run (Staging)
+      id: deploy
+      uses: google-github-actions/deploy-cloudrun@v1
+      with:
+        service: ${{ env.SERVICE_NAME }}-staging
+        image: ${{ needs.build.outputs.image }}
+        region: ${{ env.REGION }}
+        env_vars: |
+          NODE_ENV=staging
+          ENVIRONMENT=staging
+          AI_SERVICE_NAME=${{ env.SERVICE_NAME }}-staging
+        secrets: |
+          MONGODB_URL=mongodb-url-staging:latest
+          REDIS_URL=redis-url-staging:latest
+          OPENAI_API_KEY=openai-api-key:latest
+          JWT_SECRET=jwt-secret:latest
+          BACKEND_SERVICE_URL=backend-service-url-staging:latest
+        flags: |
+          --memory=2Gi
+          --cpu=2
+          --concurrency=100
+          --max-instances=5
+          --min-instances=1
+          --port=8080
+          --allow-unauthenticated
+    
+    - name: Run smoke tests
+      run: |
+        sleep 30
+        curl -f ${{ steps.deploy.outputs.url }}/health
+        curl -f ${{ steps.deploy.outputs.url }}/docs
+
+  # =============================================================================
+  # DEPLOY TO PRODUCTION
+  # =============================================================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    defaults:
+      run:
+        working-directory: ./AI-services
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+    
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+    
+    - name: Deploy to Cloud Run (Production)
+      id: deploy
+      uses: google-github-actions/deploy-cloudrun@v1
+      with:
+        service: ${{ env.SERVICE_NAME }}
+        image: ${{ needs.build.outputs.image }}
+        region: ${{ env.REGION }}
+        env_vars: |
+          NODE_ENV=production
+          ENVIRONMENT=production
+          AI_SERVICE_NAME=${{ env.SERVICE_NAME }}
+        secrets: |
+          MONGODB_URL=mongodb-url:latest
+          REDIS_URL=redis-url:latest
+          OPENAI_API_KEY=openai-api-key:latest
+          JWT_SECRET=jwt-secret:latest
+          BACKEND_SERVICE_URL=backend-service-url:latest
+          TWITTER_API_KEY=twitter-api-key:latest
+          TWITTER_API_SECRET=twitter-api-secret:latest
+          YOUTUBE_API_KEY=youtube-api-key:latest
+          FACEBOOK_APP_ID=facebook-app-id:latest
+          FACEBOOK_APP_SECRET=facebook-app-secret:latest
+          LINKEDIN_CLIENT_ID=linkedin-client-id:latest
+          LINKEDIN_CLIENT_SECRET=linkedin-client-secret:latest
+          PINECONE_API_KEY=pinecone-api-key:latest
+          PINECONE_ENVIRONMENT=pinecone-environment:latest
+        flags: |
+          --memory=4Gi
+          --cpu=4
+          --concurrency=200
+          --max-instances=20
+          --min-instances=2
+          --port=8080
+          --allow-unauthenticated
+    
+    - name: Run comprehensive tests
+      run: |
+        sleep 60
+        curl -f ${{ steps.deploy.outputs.url }}/health
+        curl -f ${{ steps.deploy.outputs.url }}/docs
+        # Add more comprehensive API tests here
+    
+    - name: Update traffic to new revision
+      run: |
+        gcloud run services update-traffic ${{ env.SERVICE_NAME }} \
+          --to-latest \
+          --region=${{ env.REGION }}
+    
+    - name: Create GitHub release
+      if: github.ref == 'refs/heads/main'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ai-services-v${{ github.run_number }}
+        release_name: AI Services Release v${{ github.run_number }}
+        body: |
+          ## AI Services Deployment
+          
+          **Environment:** Production
+          **Image:** ${{ needs.build.outputs.image }}
+          **Service URL:** ${{ steps.deploy.outputs.url }}
+          
+          ### Changes
+          ${{ github.event.head_commit.message }}
+          
+          ### Deployment Details
+          - **Region:** ${{ env.REGION }}
+          - **Memory:** 4Gi
+          - **CPU:** 4
+          - **Max Instances:** 20
+        draft: false
+        prerelease: false
+
+  # =============================================================================
+  # CLEANUP
+  # =============================================================================
+  cleanup:
+    name: Cleanup Old Revisions
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+    
+    steps:
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+    
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+    
+    - name: Cleanup old Cloud Run revisions
+      run: |
+        # Keep only the latest 5 revisions
+        gcloud run revisions list \
+          --service=${{ env.SERVICE_NAME }} \
+          --region=${{ env.REGION }} \
+          --format="value(metadata.name)" \
+          --sort-by="~metadata.creationTimestamp" \
+          --limit=100 | tail -n +6 | while read revision; do
+            echo "Deleting old revision: $revision"
+            gcloud run revisions delete $revision --region=${{ env.REGION }} --quiet || true
+          done
+    
+    - name: Cleanup old container images
+      run: |
+        # Keep only the latest 10 images
+        gcloud container images list-tags ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }} \
+          --format="get(digest)" \
+          --sort-by="~timestamp" \
+          --limit=100 | tail -n +11 | while read digest; do
+            echo "Deleting old image: $digest"
+            gcloud container images delete "${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}@$digest" --quiet || true
+          done

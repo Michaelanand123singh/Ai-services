@@ -1,447 +1,299 @@
-# Bloocube AI Services
+# 🤖 Bloocube AI Services
 
-A comprehensive AI-powered service for social media management, competitor analysis, and content optimization. Built with FastAPI, LangChain, and advanced ML models.
-
-## 🚀 Features
-
-### Core AI Capabilities
-- **Competitor Analysis**: Deep analysis of competitor profiles across social platforms
-- **Content Suggestions**: AI-powered hashtag, caption, and posting time recommendations
-- **Brand-Creator Matching**: Intelligent matchmaking between brands and content creators
-- **Performance Forecasting**: Predictive analytics for content performance
-- **RAG Pipeline**: Retrieval-Augmented Generation for context-aware responses
-
-### Social Media Integration
-- **Multi-Platform Support**: Instagram, YouTube, Twitter, LinkedIn, Facebook
-- **Data Collection**: Profile analysis, post metrics, engagement tracking
-- **API Abstraction**: Unified interface for different social platforms
-
-### Advanced Features
-- **Vector Search**: Semantic similarity using embeddings
-- **Structured Logging**: JSON-formatted logs with context
-- **Error Handling**: Comprehensive exception handling
-- **Input Validation**: Robust validation for all API inputs
-- **Caching Support**: Redis integration for performance optimization
-- **Background Tasks**: Async processing for long-running operations
-
-## 📋 Prerequisites
-
-- Python 3.11+
-- MongoDB 4.4+
-- Redis 6.0+
-- OpenAI API Key
-- Social Media API Keys (optional)
-
-## 🛠️ Installation
-
-### 1. Clone the Repository
-```bash
-git clone <repository-url>
-cd AI-services
-```
-
-### 2. Create Virtual Environment
-```bash
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# Linux/Mac
-source venv/bin/activate
-```
-
-### 3. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Environment Configuration
-```bash
-# Copy the example environment file
-cp env.example .env
-
-# Edit the .env file with your configuration
-nano .env
-```
-
-### 5. Required Environment Variables
-```env
-# OpenAI Configuration
-OPENAI_API_KEY=your_openai_api_key_here
-
-# JWT Configuration
-JWT_SECRET=your_jwt_secret_here
-JWT_ALGORITHM=HS256
-JWT_EXPIRE_MINUTES=30
-
-# Database Configuration
-MONGODB_URL=mongodb://localhost:27017/bloocube_ai
-REDIS_URL=redis://localhost:6379/0
-
-# Vector Database Configuration
-VECTOR_DB_TYPE=faiss
-PINECONE_API_KEY=your_pinecone_api_key_here
-PINECONE_ENVIRONMENT=your_pinecone_environment_here
-
-# Social Media API Keys (Optional)
-TWITTER_API_KEY=your_twitter_api_key_here
-TWITTER_API_SECRET=your_twitter_api_secret_here
-YOUTUBE_API_KEY=your_youtube_api_key_here
-LINKEDIN_CLIENT_ID=your_linkedin_client_id_here
-FACEBOOK_APP_ID=your_facebook_app_id_here
-```
+AI-powered microservice for social media analysis, competitor research, content suggestions, and brand-creator matchmaking.
 
 ## 🚀 Quick Start
 
-### 1. Start the Service
+### Prerequisites
+
+- Python 3.11+
+- Docker & Docker Compose
+- Google Cloud SDK (for deployment)
+- MongoDB
+- Redis
+
+### Local Development
+
+1. **Clone and setup**
+   ```bash
+   cd AI-services
+   cp env.example .env
+   # Edit .env with your API keys
+   ```
+
+2. **Using Docker Compose (Recommended)**
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **Manual Setup**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   uvicorn src.main:app --reload --port 8001
+   ```
+
+4. **Access the service**
+   - API: http://localhost:8001
+   - Documentation: http://localhost:8001/docs
+   - Health Check: http://localhost:8001/health
+
+## 🌐 GCP Deployment
+
+### 1. Setup GCP Resources
 ```bash
-# Development mode
-uvicorn src.main:app --host 0.0.0.0 --port 8001 --reload
+# Make scripts executable (Linux/Mac)
+chmod +x scripts/setup-gcp.sh
+chmod +x deploy.sh
 
-# Production mode
-uvicorn src.main:app --host 0.0.0.0 --port 8001 --workers 4
+# Run GCP setup
+./scripts/setup-gcp.sh YOUR_PROJECT_ID us-central1
 ```
 
-### 2. Access the API Documentation
-- **Swagger UI**: http://localhost:8001/docs
-- **ReDoc**: http://localhost:8001/redoc
-- **Health Check**: http://localhost:8001/health
-
-### 3. Test the Service
+### 2. Update Secrets
 ```bash
-# Health check
-curl http://localhost:8001/health
-
-# Competitor analysis
-curl -X POST "http://localhost:8001/ai/competitor-analysis" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_id": "user123",
-    "platform": "instagram",
-    "competitor_handles": ["@competitor1", "@competitor2"],
-    "analysis_type": "comprehensive"
-  }'
+# Update secrets in Google Secret Manager
+gcloud secrets versions add mongodb-url --data-file=- <<< "your-actual-mongodb-url"
+gcloud secrets versions add openai-api-key --data-file=- <<< "your-actual-openai-key"
+# ... update other secrets
 ```
 
-## 🐳 Docker Deployment
-
-### Using Docker Compose
+### 3. Deploy to Cloud Run
 ```bash
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f ai-service
-
-# Stop services
-docker-compose down
+./deploy.sh --project YOUR_PROJECT_ID --region us-central1
 ```
 
-### Manual Docker Build
+### 4. CI/CD Pipeline
+The GitHub Actions workflow automatically:
+- Runs tests and security scans
+- Builds and pushes Docker images
+- Deploys to staging/production
+- Sets up monitoring and alerts
+
+## 📊 Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │    Backend      │    │  AI Services    │
+│   (Next.js)     │───▶│   (Node.js)     │───▶│   (FastAPI)     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                       │
+                       ┌─────────────────┐            │
+                       │   Databases     │◀───────────┘
+                       │ MongoDB + Redis │
+                       └─────────────────┘
+```
+
+## 🔧 API Endpoints
+
+### Core Services
+- `POST /ai/competitor-analysis` - Analyze competitors
+- `POST /ai/suggestions` - Generate content suggestions
+- `POST /ai/matchmaking` - Brand-creator matching
+- `POST /ai/trends` - Trend analysis
+- `POST /ai/predictions` - Performance predictions
+
+### Specialized Endpoints
+- `POST /ai/suggestions/hashtags` - Hashtag suggestions
+- `POST /ai/suggestions/captions` - Caption generation
+- `POST /ai/suggestions/posting-times` - Optimal timing
+- `POST /ai/suggestions/content-ideas` - Content ideas
+
+### Utility Endpoints
+- `GET /health` - Health check
+- `GET /docs` - API documentation
+- `GET /metrics` - Prometheus metrics
+
+## 🔐 Environment Variables
+
+Key environment variables (see `env.example` for complete list):
+
 ```bash
-# Build the image
-docker build -t bloocube-ai-service .
+# Service Configuration
+AI_SERVICE_PORT=8001
+NODE_ENV=production
 
-# Run the container
-docker run -p 8001:8001 --env-file .env bloocube-ai-service
-```
+# Database
+MONGODB_URL=mongodb://localhost:27017/bloocube
+REDIS_URL=redis://localhost:6379/0
 
-## 📚 API Documentation
+# AI Models
+OPENAI_API_KEY=your-openai-key
+OPENAI_MODEL=gpt-4-turbo-preview
 
-### Core Endpoints
+# Social Media APIs
+TWITTER_API_KEY=your-twitter-key
+YOUTUBE_API_KEY=your-youtube-key
+# ... other social media APIs
 
-#### Health Check
-- `GET /health` - Basic health check
-- `GET /health/detailed` - Detailed system status
-- `GET /health/ready` - Readiness probe
-- `GET /health/live` - Liveness probe
-
-#### Competitor Analysis
-- `POST /ai/competitor-analysis` - Analyze competitor profiles
-- `GET /ai/competitor-analysis/{analysis_id}` - Get analysis results
-
-#### Content Suggestions
-- `POST /ai/suggestions/hashtags` - Generate hashtag suggestions
-- `POST /ai/suggestions/captions` - Generate caption suggestions
-- `POST /ai/suggestions/posting-times` - Suggest optimal posting times
-- `POST /ai/suggestions/content-ideas` - Generate content ideas
-
-#### Matchmaking
-- `POST /ai/matchmaking/brand-creator` - Match brands with creators
-- `GET /ai/matchmaking/compatibility/{brand_id}/{creator_id}` - Get compatibility score
-- `GET /ai/matchmaking/trending-creators` - Get trending creators
-
-#### Trend Analysis
-- `POST /ai/trends/analyze` - Analyze trends across platforms
-- `POST /ai/trends/hashtag` - Analyze specific hashtag trends
-- `GET /ai/trends/trending-hashtags` - Get trending hashtags
-- `GET /ai/trends/trending-content` - Get trending content types
-- `GET /ai/trends/audience-insights` - Get audience trend insights
-
-#### Performance Prediction
-- `POST /ai/predictions/content` - Predict content performance
-- `POST /ai/predictions/campaign` - Predict campaign performance
-- `POST /ai/predictions/creator` - Predict creator performance
-- `GET /ai/predictions/historical-performance/{user_id}` - Get historical performance data
-
-### Request/Response Examples
-
-#### Competitor Analysis Request
-```json
-{
-  "user_id": "user123",
-  "platform": "instagram",
-  "competitor_handles": ["@competitor1", "@competitor2"],
-  "analysis_type": "comprehensive",
-  "metrics": ["engagement_rate", "follower_growth", "content_performance"]
-}
-```
-
-#### Content Suggestion Request
-```json
-{
-  "user_id": "user123",
-  "platform": "instagram",
-  "content_type": "post",
-  "topic": "fitness",
-  "target_audience": "young_adults",
-  "tone": "motivational"
-}
-```
-
-## 🏗️ Project Structure
-
-```
-AI-services/
-├── src/
-│   ├── api/                    # FastAPI endpoints
-│   │   ├── health.py          # Health check endpoints
-│   │   ├── competitor.py      # Competitor analysis APIs
-│   │   └── suggestions.py     # Content suggestion APIs
-│   │
-│   ├── core/                   # Core configuration
-│   │   ├── config.py          # Environment variables & settings
-│   │   ├── logger.py          # Structured logging setup
-│   │   └── exceptions.py      # Custom error handling
-│   │
-│   ├── services/               # Business logic
-│   │   ├── rag_service.py     # RAG pipeline implementation
-│   │   ├── competitor_service.py # Competitor analysis logic
-│   │   ├── nlp_utils.py       # NLP processing utilities
-│   │   └── social/            # Social media integrations
-│   │       ├── instagram.py
-│   │       ├── youtube.py
-│   │       ├── twitter.py
-│   │       ├── linkedin.py
-│   │       └── facebook.py
-│   │
-│   ├── pipelines/              # AI workflows
-│   │   └── competitor_analysis.py # End-to-end analysis pipeline
-│   │
-│   ├── models/                 # AI model integrations
-│   │   ├── llm_client.py      # OpenAI GPT integration
-│   │   ├── embedding_model.py # Text embedding models
-│   │   └── vector_store.py    # Vector database operations
-│   │
-│   ├── utils/                  # Utilities
-│   │   ├── helpers.py         # Helper functions
-│   │   ├── validators.py      # Input validation
-│   │   └── constants.py       # Application constants
-│   │
-│   └── main.py                # FastAPI application entry point
-│
-├── tests/                      # Test suite
-│   ├── test_competitor.py     # Competitor analysis tests
-│   └── test_suggestions.py    # Content suggestion tests
-│
-├── scripts/                    # Data processing scripts
-│   ├── embed_data.py          # Preprocess & embed data
-│   └── sync_db.py             # Sync embeddings with database
-│
-├── requirements.txt           # Python dependencies
-├── env.example               # Environment variables template
-├── Dockerfile               # Container configuration
-├── docker-compose.yml       # Multi-service orchestration
-└── README.md               # This file
+# Security
+JWT_SECRET=your-jwt-secret-must-match-backend
 ```
 
 ## 🧪 Testing
 
-### Run Tests
 ```bash
 # Run all tests
-pytest
+pytest tests/ -v
 
 # Run with coverage
-pytest --cov=src
+pytest tests/ --cov=src --cov-report=html
 
-# Run specific test file
-pytest tests/test_competitor.py
-
-# Run with verbose output
-pytest -v
+# Run specific test categories
+pytest tests/test_competitor.py -v
+pytest tests/test_suggestions.py -v
 ```
 
-### Test Categories
-- **Unit Tests**: Individual component testing
-- **Integration Tests**: API endpoint testing
-- **Performance Tests**: Load and stress testing
-- **AI Model Tests**: Model accuracy and performance
+## 📊 Monitoring
 
-## 🔧 Configuration
-
-### Environment Variables
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `OPENAI_API_KEY` | OpenAI API key for LLM access | - | Yes |
-| `JWT_SECRET` | Secret key for JWT tokens | - | Yes |
-| `MONGODB_URL` | MongoDB connection string | `mongodb://localhost:27017/bloocube_ai` | Yes |
-| `REDIS_URL` | Redis connection string | `redis://localhost:6379/0` | Yes |
-| `VECTOR_DB_TYPE` | Vector database type (faiss/pinecone) | `faiss` | No |
-| `LOG_LEVEL` | Logging level | `INFO` | No |
-| `DEBUG` | Debug mode | `false` | No |
-
-### Feature Flags
-- `ENABLE_COMPETITOR_ANALYSIS`: Enable competitor analysis features
-- `ENABLE_CONTENT_SUGGESTIONS`: Enable content suggestion features
-- `ENABLE_MATCHMAKING`: Enable brand-creator matchmaking
-- `ENABLE_SOCIAL_MEDIA_INTEGRATION`: Enable social media API integrations
-
-## 📊 Monitoring & Logging
-
-### Logging
-- **Structured Logging**: JSON-formatted logs with context
-- **Log Levels**: DEBUG, INFO, WARNING, ERROR, CRITICAL
-- **Log Rotation**: Automatic rotation and compression
-- **Context Tracking**: Request IDs and user context
-
-### Metrics
-- **API Metrics**: Request count, response times, error rates
-- **AI Metrics**: Token usage, model performance, processing times
-- **System Metrics**: CPU, memory, disk usage
-- **Business Metrics**: Analysis counts, suggestion accuracy
-
-### Health Checks
-- **Liveness Probe**: Service is running
-- **Readiness Probe**: Service is ready to accept requests
-- **Dependency Checks**: Database and external service connectivity
-
-## 🚀 Deployment
-
-### Production Deployment
-
-#### Using Docker Compose
+### Local Monitoring Stack
 ```bash
-# Production deployment
-docker-compose -f docker-compose.prod.yml up -d
+# Start monitoring services
+docker-compose up prometheus grafana
+
+# Access dashboards
+# Prometheus: http://localhost:9090
+# Grafana: http://localhost:3001 (admin/admin123)
 ```
 
-#### Using Kubernetes
+### Production Monitoring
+- **Metrics**: Prometheus + Google Cloud Monitoring
+- **Logs**: Structured JSON logs to Google Cloud Logging
+- **Alerts**: Email/Slack notifications for errors
+- **Health Checks**: Automated uptime monitoring
+
+## 🔄 Background Tasks
+
+The service uses Celery for background processing:
+
 ```bash
-# Apply Kubernetes manifests
-kubectl apply -f k8s/
+# Start Celery worker
+celery -A src.tasks.celery worker --loglevel=info
+
+# Start Celery beat (scheduler)
+celery -A src.tasks.celery beat --loglevel=info
+
+# Monitor with Flower
+celery -A src.tasks.celery flower
 ```
 
-#### Environment-Specific Configs
-- **Development**: `docker-compose.yml`
-- **Staging**: `docker-compose.staging.yml`
-- **Production**: `docker-compose.prod.yml`
+## 🛡️ Security
 
-### Scaling
-- **Horizontal Scaling**: Multiple service instances
-- **Load Balancing**: Nginx or cloud load balancer
-- **Database Scaling**: MongoDB replica sets
-- **Cache Scaling**: Redis cluster
+- **Authentication**: JWT tokens (shared with backend)
+- **Rate Limiting**: Per-endpoint rate limits
+- **Input Validation**: Pydantic models
+- **Security Headers**: CORS, CSP, HSTS
+- **Secrets Management**: Google Secret Manager
+- **Container Security**: Non-root user, minimal image
 
-## 🔒 Security
+## 📈 Performance
 
-### Authentication
-- **JWT Tokens**: Secure API authentication
-- **Role-Based Access**: Creator, Brand, Admin roles
-- **API Key Management**: Secure key storage and rotation
+- **Caching**: Redis for API responses and embeddings
+- **Async Processing**: FastAPI + asyncio
+- **Connection Pooling**: Database connection optimization
+- **Load Balancing**: Nginx reverse proxy
+- **Auto Scaling**: Cloud Run automatic scaling
 
-### Data Protection
-- **Input Validation**: Comprehensive input sanitization
-- **Rate Limiting**: API rate limiting and throttling
-- **Data Encryption**: Sensitive data encryption at rest
-- **Audit Logging**: Complete audit trail
+## 🔧 Development
 
-### Best Practices
-- **Environment Variables**: No hardcoded secrets
-- **HTTPS Only**: Secure communication
-- **CORS Configuration**: Proper cross-origin settings
-- **Security Headers**: Helmet.js security headers
+### Code Quality
+```bash
+# Format code
+black src/ tests/
+isort src/ tests/
 
-## 🤝 Contributing
+# Lint code
+flake8 src/ tests/
 
-### Development Setup
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run the test suite
-6. Submit a pull request
-
-### Code Standards
-- **Python**: Follow PEP 8 guidelines
-- **Type Hints**: Use type annotations
-- **Documentation**: Docstrings for all functions
-- **Testing**: Maintain test coverage > 80%
-
-### Commit Convention
-```
-feat: add new feature
-fix: bug fix
-docs: documentation update
-style: code formatting
-refactor: code refactoring
-test: add or update tests
-chore: maintenance tasks
+# Security scan
+bandit -r src/
+safety check
 ```
 
-## 📝 License
+### Adding New Features
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+1. **Create API endpoint** in `src/api/`
+2. **Add business logic** in `src/services/`
+3. **Update models** in `src/models/`
+4. **Add tests** in `tests/`
+5. **Update documentation**
 
-## 🆘 Support
+### Database Migrations
+```bash
+# Run database setup
+python -m src.scripts.setup_db
 
-### Documentation
-- **API Docs**: http://localhost:8001/docs
-- **Code Documentation**: Generated with Sphinx
-- **Architecture Docs**: See `/docs` directory
+# Create embeddings index
+python -m src.scripts.create_embeddings
+```
 
-### Getting Help
-- **Issues**: GitHub Issues for bug reports
-- **Discussions**: GitHub Discussions for questions
-- **Email**: support@bloocube.ai
+## 🚨 Troubleshooting
 
 ### Common Issues
 
-#### Import Errors
-```bash
-# Ensure virtual environment is activated
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
+1. **OpenAI API Errors**
+   ```bash
+   # Check API key
+   curl -H "Authorization: Bearer $OPENAI_API_KEY" \
+        https://api.openai.com/v1/models
+   ```
 
-# Reinstall dependencies
-pip install -r requirements.txt
+2. **Database Connection Issues**
+   ```bash
+   # Test MongoDB connection
+   mongosh $MONGODB_URL --eval "db.adminCommand('ping')"
+   
+   # Test Redis connection
+   redis-cli -u $REDIS_URL ping
+   ```
+
+3. **Memory Issues**
+   ```bash
+   # Monitor memory usage
+   docker stats
+   
+   # Increase memory limits in docker-compose.yml
+   ```
+
+### Logs
+```bash
+# View application logs
+docker-compose logs -f ai-service
+
+# View specific service logs
+docker-compose logs -f celery-worker
+
+# GCP Cloud Run logs
+gcloud logging read "resource.type=cloud_run_revision"
 ```
 
-#### Database Connection Issues
-```bash
-# Check MongoDB status
-mongod --version
+## 📚 Documentation
 
-# Check Redis status
-redis-cli ping
-```
+- **API Docs**: Available at `/docs` endpoint
+- **Architecture**: See `docs/architecture.md`
+- **Deployment**: See `docs/deployment.md`
+- **Contributing**: See `CONTRIBUTING.md`
 
-#### API Key Issues
-```bash
-# Verify environment variables
-echo $OPENAI_API_KEY
+## 🤝 Contributing
 
-# Check .env file
-cat .env
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Run quality checks
+6. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🆘 Support
+
+- **Issues**: GitHub Issues
+- **Documentation**: `/docs` endpoint
+- **Email**: support@bloocube.com
+
+---
+
+**Built with ❤️ by the Bloocube Team**
