@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     
     # AI Model Configuration - Multi-Provider Support
     # Primary AI Provider (can be dynamically switched)
-    primary_ai_provider: str = Field(default="openai", env="PRIMARY_AI_PROVIDER")
+    primary_ai_provider: str = Field(default="gemini", env="PRIMARY_AI_PROVIDER")
     
     # OpenAI Configuration
     openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     
     # Google Gemini Configuration
     gemini_api_key: Optional[str] = Field(default=None, env="GEMINI_API_KEY")
-    gemini_model: str = Field(default="gemini-1.5-pro", env="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-1.5-flash", env="GEMINI_MODEL")
     
     # Embedding Models
     embedding_model: str = Field(default="text-embedding-3-large", env="EMBEDDING_MODEL")
@@ -202,19 +202,19 @@ AI_MODELS = {
     },
     # Google Gemini Models
     "gemini": {
+        "gemini-1.5-flash": {
+            "provider": "gemini",
+            "max_tokens": 8192,
+            "cost_per_1k_tokens": 0.0,  # Free tier
+            "supports_functions": True,
+            "context_window": 1000000  # flash free tier
+        },
         "gemini-1.5-pro": {
             "provider": "gemini",
             "max_tokens": 8192,
             "cost_per_1k_tokens": 0.0,  # Free tier
             "supports_functions": True,
             "context_window": 2000000  # 2M tokens
-        },
-        "gemini-1.5-flash": {
-            "provider": "gemini",
-            "max_tokens": 8192,
-            "cost_per_1k_tokens": 0.0,  # Free tier
-            "supports_functions": True,
-            "context_window": 1000000  # 1M tokens
         },
         "gemini-pro": {
             "provider": "gemini",
