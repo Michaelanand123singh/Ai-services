@@ -112,6 +112,10 @@ class Settings(BaseSettings):
     # Data Processing
     max_content_length: int = Field(default=10000, env="MAX_CONTENT_LENGTH")
     batch_size: int = Field(default=32, env="BATCH_SIZE")
+
+    # CORS / Hosts
+    allowed_cors_origins: Optional[str] = Field(default=None, env="ALLOWED_CORS_ORIGINS")
+    allowed_hosts: Optional[str] = Field(default=None, env="ALLOWED_HOSTS")
     embedding_batch_size: int = Field(default=100, env="EMBEDDING_BATCH_SIZE")
     vector_dimension: int = Field(default=1536, env="VECTOR_DIMENSION")
     

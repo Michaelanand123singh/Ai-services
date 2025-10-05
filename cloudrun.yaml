@@ -76,6 +76,11 @@ spec:
           value: "production"
         - name: ENVIRONMENT
           value: "production"
+        # CORS / Hosts
+        - name: ALLOWED_CORS_ORIGINS
+          value: "https://bloocube.com,https://admin.bloocube.com,https://api-backend.bloocube.com,https://api-ai-services.bloocube.com"
+        - name: ALLOWED_HOSTS
+          value: "bloocube.com,admin.bloocube.com,api-backend.bloocube.com,api-ai-services.bloocube.com,localhost,127.0.0.1,*"
         
         # Database Configuration
         - name: MONGODB_URL

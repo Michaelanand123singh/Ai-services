@@ -44,19 +44,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add CORS middleware
+# Add CORS middleware with environment-configured origins
+allowed_origins = [o.strip() for o in (settings.allowed_cors_origins or "").split(",") if o.strip()] or ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly for production
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Add trusted host middleware
+# Add trusted host middleware with environment-configured hosts
+allowed_hosts = [h.strip() for h in (settings.allowed_hosts or "").split(",") if h.strip()] or ["*"]
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["*"]  # Configure this properly for production
+    allowed_hosts=allowed_hosts
 )
 
 
