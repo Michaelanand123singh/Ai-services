@@ -19,6 +19,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 ENV PIP_NO_CACHE_DIR=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV NLTK_DATA=/app/nltk_data
 
 # Set default environment
 ENV NODE_ENV=production
@@ -55,7 +56,17 @@ COPY requirements.txt ./
 
 # Upgrade pip and install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    python - <<'PY'
+import nltk, os
+data_dir = os.environ.get('NLTK_DATA', '/app/nltk_data')
+os.makedirs(data_dir, exist_ok=True)
+try:
+    nltk.download('punkt', download_dir=data_dir, quiet=True)
+    nltk.download('stopwords', download_dir=data_dir, quiet=True)
+except Exception as e:
+    print('NLTK download warning:', e)
+PY
 
 # Copy application code
 COPY . .
@@ -84,17 +95,8 @@ if [ "$RUN_MIGRATIONS" = "true" ]; then\n\
     python -m src.scripts.migrate\n\
 fi\n\
 \n\
-# Download NLTK data if needed\n\
-python -c "import nltk; nltk.download('"'"'punkt'"'"', quiet=True); nltk.download('"'"'stopwords'"'"', quiet=True)"\n\
-\n\
 # Start the application\n\
-exec uvicorn src.main:app \\\n\
-    --host ${AI_SERVICE_HOST:-0.0.0.0} \\\n\
-    --port ${AI_SERVICE_PORT:-8080} \\\n\
-    --workers ${WORKERS:-1} \\\n\
-    --worker-class uvicorn.workers.UvicornWorker \\\n\
-    --access-log \\\n\
-    --log-level ${LOG_LEVEL:-info}\n\
+exec uvicorn src.main:app \\\n    --host ${AI_SERVICE_HOST:-0.0.0.0} \\\n    --port ${AI_SERVICE_PORT:-8080} \\\n    --workers ${WORKERS:-1} \\\n    --access-log \\\n    --log-level ${LOG_LEVEL:-info}\n\
 ' > /app/start.sh && chmod +x /app/start.sh
 
 # Expose port (Cloud Run uses 8080 by default)
