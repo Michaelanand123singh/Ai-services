@@ -56,17 +56,10 @@ COPY requirements.txt ./
 
 # Upgrade pip and install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt && \
-    python - <<'PY'
-import nltk, os
-data_dir = os.environ.get('NLTK_DATA', '/app/nltk_data')
-os.makedirs(data_dir, exist_ok=True)
-try:
-    nltk.download('punkt', download_dir=data_dir, quiet=True)
-    nltk.download('stopwords', download_dir=data_dir, quiet=True)
-except Exception as e:
-    print('NLTK download warning:', e)
-PY
+    pip install --no-cache-dir -r requirements.txt
+
+# Pre-download NLTK data (no heredoc; compatible with older Dockerfile parsers)
+RUN python -c "import os, nltk; d=os.environ.get('NLTK_DATA','/app/nltk_data'); os.makedirs(d, exist_ok=True); nltk.download('punkt', download_dir=d, quiet=True); nltk.download('stopwords', download_dir=d, quiet=True)" || true
 
 # Copy application code
 COPY . .
