@@ -68,8 +68,7 @@ spec:
           value: "bloocube-ai-service"
         - name: AI_SERVICE_VERSION
           value: "1.0.0"
-        - name: AI_SERVICE_PORT
-          value: "8080"
+        # Cloud Run injects PORT=8080; do not override with a custom AI_SERVICE_PORT
         - name: AI_SERVICE_HOST
           value: "0.0.0.0"
         - name: NODE_ENV

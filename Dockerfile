@@ -90,9 +90,9 @@ exec uvicorn src.main:app \\\n    --host ${AI_SERVICE_HOST:-0.0.0.0} \\\n    --p
 # Expose port (Cloud Run uses 8080 by default)
 EXPOSE 8080
 
-# Health check
+# Health check (Cloud Run uses PORT=8080)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:${AI_SERVICE_PORT:-8080}/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Set the startup command
 CMD ["/app/start.sh"]
