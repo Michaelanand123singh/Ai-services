@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from src.core.config import settings
 from src.core.logger import ai_logger, log_ai_model_call
 from src.core.exceptions import AIServiceException, EmbeddingError, VectorDatabaseError
-from src.models.llm_client import LLMClient
+from src.models.multi_llm_client import MultiLLMClient
 from src.models.embedding_model import EmbeddingModel
-from src.models.vector_store import VectorStore
+from src.models.vector_store import get_vector_store
 from src.utils.helpers import clean_text, extract_keywords
 
 
@@ -29,9 +29,12 @@ class RAGService:
     """RAG service for generating AI-powered insights"""
     
     def __init__(self):
-        self.llm_client = LLMClient()
-        self.embedding_model = EmbeddingModel()
-        self.vector_store = VectorStore()
+        # Use multi-provider client so Gemini works without OpenAI
+        self.llm_client = MultiLLMClient()
+        # Initialize embedding model only if OpenAI key is configured
+        self.embedding_model = EmbeddingModel() if settings.openai_api_key else None
+        # Use configured vector store implementation (FAISS/Chroma/Pinecone)
+        self.vector_store = get_vector_store()
         self.logger = ai_logger
     
     async def generate_competitor_insights(
@@ -315,6 +318,69 @@ class RAGService:
         except Exception as e:
             self.logger.log_error(e, {"operation": "get_user_suggestion_history"})
             raise AIServiceException(f"Failed to retrieve suggestion history: {str(e)}")
+    
+    async def generate_trend_recommendations(
+        self,
+        trend_analysis: Dict[str, Any],
+        user_id: str
+    ) -> List[str]:
+        """Generate simple recommendations based on trend analysis using the active LLM."""
+        try:
+            prompt = (
+                "Provide 5 concise, actionable social media recommendations based on this trend analysis: \n"
+                f"{str(trend_analysis)[:2000]}\nReturn a bullet list."
+            )
+            result = await self.llm_client.generate_text(prompt=prompt, provider="gemini", max_tokens=300)
+            lines = [line.strip("- ") for line in result.get("content", "").splitlines() if line.strip()]
+            return lines[:5] or ["Focus on consistent posting during peak times.", "Leverage trending hashtags with relevance."]
+        except Exception:
+            return [
+                "Focus on consistent posting during peak times.",
+                "Leverage trending hashtags with relevance.",
+                "Experiment with 2-3 content formats from trending content.",
+            ]
+
+    async def generate_performance_recommendations(
+        self,
+        prediction: Dict[str, Any],
+        user_id: str
+    ) -> List[str]:
+        """Generate simple recommendations based on performance prediction."""
+        try:
+            prompt = (
+                "Provide 5 concise recommendations to improve predicted performance: \n"
+                f"{str(prediction)[:2000]}\nReturn a bullet list."
+            )
+            result = await self.llm_client.generate_text(prompt=prompt, provider="gemini", max_tokens=300)
+            lines = [line.strip("- ") for line in result.get("content", "").splitlines() if line.strip()]
+            return lines[:5] or ["Refine caption with a strong CTA.", "Test posting at the top predicted time."]
+        except Exception:
+            return [
+                "Refine caption with a strong CTA.",
+                "Test posting at the top predicted time.",
+                "Reduce number of hashtags to most relevant.",
+            ]
+
+    async def generate_campaign_recommendations(
+        self,
+        prediction: Dict[str, Any],
+        user_id: str
+    ) -> List[str]:
+        """Generate simple recommendations for campaigns."""
+        try:
+            prompt = (
+                "Provide 5 concise campaign recommendations based on this analysis: \n"
+                f"{str(prediction)[:2000]}\nReturn a bullet list."
+            )
+            result = await self.llm_client.generate_text(prompt=prompt, provider="gemini", max_tokens=300)
+            lines = [line.strip("- ") for line in result.get("content", "").splitlines() if line.strip()]
+            return lines[:5] or ["Allocate budget to top-performing platform.", "Iterate creatives weekly based on metrics."]
+        except Exception:
+            return [
+                "Allocate budget to top-performing platform.",
+                "Iterate creatives weekly based on metrics.",
+                "Monitor frequency caps to avoid fatigue.",
+            ]
     
     # Private helper methods
     

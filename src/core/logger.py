@@ -184,14 +184,15 @@ def log_api_response(endpoint: str, method: str, status_code: int,
     ai_logger.log_api_call(endpoint, method, status_code, duration_ms, user_id)
 
 
-def log_ai_model_call(model: str, operation: str, tokens_used: int = None):
-    """Log AI model call"""
+def log_ai_model_call(model: str, operation: str, tokens_used: int = None, **kwargs):
+    """Log AI model call (accepts extra context like provider via kwargs)"""
     ai_logger.log_ai_operation(
         operation=operation,
         model=model,
         tokens_used=tokens_used or 0,
         duration_ms=0,  # Will be updated by caller
-        success=True
+        success=True,
+        **kwargs
     )
 
 

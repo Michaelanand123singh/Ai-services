@@ -1,13 +1,18 @@
 """
 Core configuration module for Bloocube AI Service
 """
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import List, Optional
 import os
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra='ignore'
+    )
     """Application settings loaded from environment variables"""
     
     # Service Configuration
@@ -118,9 +123,7 @@ class Settings(BaseSettings):
     celery_broker_url: str = Field(default="redis://localhost:6379/1", env="CELERY_BROKER_URL")
     celery_result_backend: str = Field(default="redis://localhost:6379/1", env="CELERY_RESULT_BACKEND")
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    # (Pydantic v2) model_config above replaces the old Config class
 
 
 # Global settings instance
