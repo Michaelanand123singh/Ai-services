@@ -12,16 +12,7 @@ from contextlib import asynccontextmanager
 from src.core.config import settings
 from src.core.logger import setup_logging, ai_logger
 from src.core.exceptions import AIServiceException, get_http_status_from_error
-
-# Startup import diagnostics to catch failing modules during Cloud Run startup
-import sys
-try:
-    from src.api import health, competitor, suggestions, matchmaking, trends, predictions, ai_providers
-except Exception as e:
-    print(f"CRITICAL: Failed to import routers: {e}", file=sys.stderr)
-    import traceback
-    traceback.print_exc()
-    raise
+from src.api import health, competitor, suggestions, matchmaking, trends, predictions, ai_providers
 
 # Setup logging
 setup_logging()

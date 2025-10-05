@@ -17,8 +17,7 @@ class NLPService:
     
     def __init__(self):
         self.logger = ai_logger
-        self.nlp = None
-        self._load_models()
+        self.nlp = None  # Lazy-loaded
     
     def _load_models(self):
         """Load NLP models"""
@@ -46,6 +45,11 @@ class NLPService:
             self.logger.log_error(e, {"operation": "load_nlp_models"})
             # Fallback to basic text processing
             self.nlp = None
+
+    def _ensure_loaded(self):
+        """Ensure heavy models are loaded lazily."""
+        if self.nlp is None:
+            self._load_models()
     
     def clean_text(self, text: str) -> str:
         """Clean and normalize text"""
@@ -113,6 +117,7 @@ class NLPService:
         if not text:
             return []
         
+        self._ensure_loaded()
         if self.nlp:
             doc = self.nlp(text)
             return [token.text for token in doc if not token.is_space]
@@ -256,7 +261,10 @@ class NLPService:
     
     def extract_entities(self, text: str) -> List[Dict[str, Any]]:
         """Extract named entities from text"""
-        if not text or not self.nlp:
+        if not text:
+            return []
+        self._ensure_loaded()
+        if not self.nlp:
             return []
         
         try:
