@@ -10,6 +10,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 
 from src.core.config import settings
+import os
 from src.core.logger import setup_logging, ai_logger
 from src.core.exceptions import AIServiceException, get_http_status_from_error
 from src.api import health, competitor, suggestions, matchmaking, trends, predictions, ai_providers
@@ -185,10 +186,16 @@ async def metrics():
 
 
 if __name__ == "__main__":
+    # Prefer Cloud Run's PORT if present, then AI_SERVICE_PORT, then settings default (finally 8080)
+    port_env = os.environ.get("PORT")
+    ai_port_env = os.environ.get("AI_SERVICE_PORT")
+    port_to_use = int(port_env or ai_port_env or settings.ai_service_port or 8080)
+    host_to_use = os.environ.get("AI_SERVICE_HOST", settings.ai_service_host or "0.0.0.0")
+
     uvicorn.run(
         "src.main:app",
-        host=settings.ai_service_host,
-        port=settings.ai_service_port,
+        host=host_to_use,
+        port=port_to_use,
         reload=True,
         log_level=settings.log_level.lower()
     )
