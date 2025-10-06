@@ -166,14 +166,50 @@ async def analyze_trends(
         
         processing_time = int((time.time() - start_time) * 1000)
         
+        # Ensure response types align with models; provide defaults if service returns plain dicts
+        th_raw = trend_analysis.get("trending_hashtags", [])
+        th = [h if isinstance(h, dict) else h.__dict__ for h in th_raw]
+        tc_raw = trend_analysis.get("trending_content", [])
+        tc = [c if isinstance(c, dict) else c.__dict__ for c in tc_raw]
+        at_raw = trend_analysis.get("audience_trends", [])
+        at = [a if isinstance(a, dict) else a.__dict__ for a in at_raw]
+        ci = trend_analysis.get("competitor_insights", {})
+
         response = TrendAnalysisResponse(
             analysis_id=analysis_id,
             user_id=request.user_id,
             platforms=request.platforms,
-            trending_hashtags=trend_analysis["trending_hashtags"],
-            trending_content=trend_analysis["trending_content"],
-            audience_trends=trend_analysis["audience_trends"],
-            competitor_insights=trend_analysis["competitor_insights"],
+            trending_hashtags=[{
+                "hashtag": h.get("hashtag", "#example"),
+                "current_volume": int(h.get("current_volume", 0)),
+                "growth_rate": float(h.get("growth_rate", 0.0)),
+                "engagement_rate": float(h.get("engagement_rate", 0.0)),
+                "competition_level": h.get("competition_level", "medium"),
+                "trend_direction": h.get("trend_direction", "up"),
+                "peak_time": h.get("peak_time", "18:00"),
+                "related_hashtags": h.get("related_hashtags", []),
+                "platform": h.get("platform", (request.platforms[0] if request.platforms else "instagram")),
+            } for h in th],
+            trending_content=[{
+                "content_type": c.get("content_type", "post"),
+                "topic": c.get("topic", "general"),
+                "engagement_score": float(c.get("engagement_score", 0.0)),
+                "viral_potential": float(c.get("viral_potential", 0.0)),
+                "competition_level": c.get("competition_level", "medium"),
+                "optimal_posting_time": c.get("optimal_posting_time", "18:00"),
+                "target_audience": c.get("target_audience", []),
+                "platform": c.get("platform", (request.platforms[0] if request.platforms else "instagram")),
+                "examples": c.get("examples", []),
+            } for c in tc],
+            audience_trends=[{
+                "demographic": a.get("demographic", "general"),
+                "interest_categories": a.get("interest_categories", []),
+                "engagement_patterns": a.get("engagement_patterns", {}),
+                "growth_trend": a.get("growth_trend", "stable"),
+                "platform_preferences": a.get("platform_preferences", {}),
+                "content_preferences": a.get("content_preferences", []),
+            } for a in at],
+            competitor_insights=ci,
             recommendations=recommendations,
             generated_at=time.time(),
             processing_time_ms=processing_time

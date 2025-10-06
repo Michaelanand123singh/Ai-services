@@ -22,8 +22,11 @@ class NLPService:
     def _load_models(self):
         """Load NLP models"""
         try:
-            # Load spaCy model
-            self.nlp = spacy.load("en_core_web_sm")
+            # Load spaCy model (optional). If unavailable, continue with basic NLP.
+            try:
+                self.nlp = spacy.load("en_core_web_sm")
+            except Exception:
+                self.nlp = None
             
             # Download required NLTK data
             try:

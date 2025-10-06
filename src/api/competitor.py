@@ -270,9 +270,9 @@ async def analyze_competitors(
             },
             "summary": {
                 "total_competitors": len(request.competitors_data),
-                "platforms_analyzed": request.platforms,
-                "analysis_type": request.analysis_type,
-                "time_period_days": request.time_period_days
+                # Derive platforms from provided competitor data
+                "platforms_analyzed": list({c.platform for c in request.competitors_data}),
+                "analysis_type": request.analysis_type
             }
         }
         

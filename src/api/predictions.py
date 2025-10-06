@@ -218,16 +218,52 @@ async def predict_content_performance(
         
         processing_time = int((time.time() - start_time) * 1000)
         
+        # Ensure types match the Pydantic models (fill sensible defaults if missing)
+        # accept either dict from service or dataclass instance
+        raw_pm = performance_prediction.get("performance_metrics", {})
+        pm = raw_pm if isinstance(raw_pm, dict) else raw_pm.__dict__
+        raw_ot = performance_prediction.get("optimal_timing", {})
+        ot = raw_ot if isinstance(raw_ot, dict) else raw_ot.__dict__
+        raw_co = performance_prediction.get("content_optimization", {})
+        co = raw_co if isinstance(raw_co, dict) else raw_co.__dict__
+        rf = performance_prediction.get("risk_factors", [])
+        sp = performance_prediction.get("success_probability", 0.5)
+
         response = PerformancePredictionResponse(
             prediction_id=prediction_id,
             user_id=request.user_id,
             content_type=request.content_type,
             platform=request.platform,
-            performance_metrics=performance_prediction["performance_metrics"],
-            optimal_timing=performance_prediction["optimal_timing"],
-            content_optimization=performance_prediction["content_optimization"],
-            risk_factors=performance_prediction["risk_factors"],
-            success_probability=performance_prediction["success_probability"],
+            performance_metrics={
+                "estimated_reach": int(pm.get("estimated_reach", 0)),
+                "estimated_impressions": int(pm.get("estimated_impressions", 0)),
+                "estimated_engagement_rate": float(pm.get("estimated_engagement_rate", 0.0)),
+                "estimated_likes": int(pm.get("estimated_likes", 0)),
+                "estimated_comments": int(pm.get("estimated_comments", 0)),
+                "estimated_shares": int(pm.get("estimated_shares", 0)),
+                "estimated_saves": int(pm.get("estimated_saves", 0)),
+                "estimated_clicks": int(pm.get("estimated_clicks", 0)),
+                "estimated_conversions": int(pm.get("estimated_conversions", 0)),
+                "confidence_score": float(pm.get("confidence_score", 0.6)),
+            },
+            optimal_timing={
+                "best_posting_time": ot.get("best_posting_time", "18:00"),
+                "best_posting_day": ot.get("best_posting_day", "Tuesday"),
+                "alternative_times": ot.get("alternative_times", ["20:00", "21:00"]),
+                "timezone": ot.get("timezone", "UTC"),
+                "reasoning": ot.get("reasoning", "Based on historical engagement patterns"),
+                "expected_performance_boost": float(ot.get("expected_performance_boost", 0.1)),
+            },
+            content_optimization={
+                "hashtag_suggestions": co.get("hashtag_suggestions", []),
+                "caption_improvements": co.get("caption_improvements", []),
+                "content_format_suggestions": co.get("content_format_suggestions", []),
+                "visual_elements": co.get("visual_elements", []),
+                "call_to_action_suggestions": co.get("call_to_action_suggestions", []),
+                "expected_improvement": float(co.get("expected_improvement", 0.1)),
+            },
+            risk_factors=list(rf),
+            success_probability=float(sp),
             recommendations=recommendations,
             generated_at=time.time(),
             processing_time_ms=processing_time
@@ -313,14 +349,33 @@ async def predict_campaign_performance(
         
         processing_time = int((time.time() - start_time) * 1000)
         
+        # Normalize campaign prediction structure to match model
+        raw_cm = campaign_prediction.get("campaign_metrics", {})
+        cm = raw_cm if isinstance(raw_cm, dict) else getattr(raw_cm, "__dict__", {})
+        pb = campaign_prediction.get("platform_breakdown", {})
+        oba = campaign_prediction.get("optimal_budget_allocation", {})
+        ra = campaign_prediction.get("risk_assessment", {})
+        sp = campaign_prediction.get("success_probability", 0.5)
+
         response = CampaignPredictionResponse(
             prediction_id=prediction_id,
             campaign_id=request.campaign_id,
-            campaign_metrics=campaign_prediction["campaign_metrics"],
-            platform_breakdown=campaign_prediction["platform_breakdown"],
-            optimal_budget_allocation=campaign_prediction["optimal_budget_allocation"],
-            risk_assessment=campaign_prediction["risk_assessment"],
-            success_probability=campaign_prediction["success_probability"],
+            campaign_metrics={
+                "estimated_total_reach": int(cm.get("estimated_total_reach", 0)),
+                "estimated_total_impressions": int(cm.get("estimated_total_impressions", 0)),
+                "estimated_engagement_rate": float(cm.get("estimated_engagement_rate", 0.0)),
+                "estimated_clicks": int(cm.get("estimated_clicks", 0)),
+                "estimated_conversions": int(cm.get("estimated_conversions", 0)),
+                "estimated_roi": float(cm.get("estimated_roi", 0.0)),
+                "estimated_cpm": float(cm.get("estimated_cpm", 0.0)),
+                "estimated_cpc": float(cm.get("estimated_cpc", 0.0)),
+                "estimated_cpa": float(cm.get("estimated_cpa", 0.0)),
+                "confidence_score": float(cm.get("confidence_score", 0.6)),
+            },
+            platform_breakdown=pb,
+            optimal_budget_allocation={k: float(v) for k, v in oba.items()},
+            risk_assessment=ra,
+            success_probability=float(sp),
             recommendations=recommendations,
             generated_at=time.time(),
             processing_time_ms=processing_time

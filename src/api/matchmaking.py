@@ -167,20 +167,62 @@ async def match_brand_creator(
             budget_constraints=request.budget_constraints
         )
         
-        # Generate campaign ideas for each match
+        # Generate campaign ideas for each match (fallback to recommendations helper)
         for match in matches:
-            match.potential_campaign_ideas = await rag_service.generate_campaign_ideas(
-                brand_profile=request.brand_profile,
-                creator_profile=match.creator_profile,
-                compatibility_score=match.compatibility_score
-            )
+            try:
+                # If RAGService had a dedicated method, it would be used here.
+                # Fallback: derive recommendations from compatibility details.
+                recs = await rag_service.generate_campaign_recommendations(
+                    prediction={
+                        "brand": request.brand_profile.model_dump() if hasattr(request.brand_profile, "model_dump") else dict(request.brand_profile),
+                        "creator": match.creator_profile.model_dump() if hasattr(match.creator_profile, "model_dump") else dict(match.creator_profile),
+                        "compatibility": match.compatibility_score.model_dump() if hasattr(match.compatibility_score, "model_dump") else dict(match.compatibility_score),
+                    },
+                    user_id=request.brand_profile.brand_id,
+                )
+                # match could be a dict from service; support both
+                if isinstance(match, dict):
+                    match["potential_campaign_ideas"] = recs
+                else:
+                    match.potential_campaign_ideas = recs
+            except Exception:
+                fallback = [
+                    "Run a short-form video teaser campaign",
+                    "Cross-post highlights to maximize reach",
+                    "A/B test two creative hooks in week 1",
+                ]
+                if isinstance(match, dict):
+                    match["potential_campaign_ideas"] = fallback
+                else:
+                    match.potential_campaign_ideas = fallback
         
         processing_time = int((time.time() - start_time) * 1000)
         
+        # Coerce matches into response model shape
+        norm_matches = []
+        for m in matches:
+            mp = m.get("creator_profile") if isinstance(m, dict) else getattr(m, "creator_profile", {})
+            cs = m.get("compatibility_score") if isinstance(m, dict) else getattr(m, "compatibility_score", {})
+            mr = m.get("match_reasons") if isinstance(m, dict) else getattr(m, "match_reasons", [])
+            ideas = m.get("potential_campaign_ideas") if isinstance(m, dict) else getattr(m, "potential_campaign_ideas", [])
+            perf = m.get("estimated_performance") if isinstance(m, dict) else getattr(m, "estimated_performance", {})
+            rb = m.get("recommended_budget") if isinstance(m, dict) else getattr(m, "recommended_budget", 0.0)
+            risk = m.get("risk_assessment") if isinstance(m, dict) else getattr(m, "risk_assessment", "")
+
+            norm_matches.append({
+                "creator_profile": mp if isinstance(mp, dict) else getattr(mp, "__dict__", {}),
+                "compatibility_score": cs if isinstance(cs, dict) else getattr(cs, "__dict__", {}),
+                "match_reasons": mr,
+                "potential_campaign_ideas": ideas,
+                "estimated_performance": perf,
+                "recommended_budget": float(rb),
+                "risk_assessment": risk,
+            })
+
         response = MatchmakingResponse(
             matchmaking_id=matchmaking_id,
             brand_id=request.brand_profile.brand_id,
-            matches=matches,
+            matches=norm_matches,
             total_candidates_evaluated=len(matches) * 10,  # Estimated
             generated_at=time.time(),
             processing_time_ms=processing_time
@@ -245,10 +287,27 @@ async def get_compatibility_score(
         
         processing_time = int((time.time() - start_time) * 1000)
         
+        # Normalize compatibility score into structured shape if service returns a float
+        raw_cs = compatibility_analysis.get("compatibility_score")
+        if isinstance(raw_cs, (int, float)):
+            cs_struct = {
+                "overall_score": float(raw_cs),
+                "audience_alignment": float(raw_cs),
+                "content_style_match": float(min(1.0, max(0.0, raw_cs - 0.05))),
+                "platform_reach": float(min(1.0, max(0.0, raw_cs - 0.1))),
+                "engagement_potential": float(min(1.0, max(0.0, raw_cs - 0.05))),
+                "budget_fit": float(min(1.0, max(0.0, raw_cs - 0.1))),
+                "brand_values_alignment": float(min(1.0, max(0.0, raw_cs - 0.05))),
+                "collaboration_history_score": float(min(1.0, max(0.0, raw_cs - 0.1)))
+            }
+        else:
+            # Assume dataclass-like; coerce to dict
+            cs_struct = raw_cs if isinstance(raw_cs, dict) else getattr(raw_cs, "__dict__", {})
+
         response = CompatibilityResponse(
             brand_id=brand_id,
             creator_id=creator_id,
-            compatibility_score=compatibility_analysis["compatibility_score"],
+            compatibility_score=cs_struct,
             detailed_analysis=compatibility_analysis["detailed_analysis"],
             recommendations=compatibility_analysis["recommendations"],
             generated_at=time.time(),

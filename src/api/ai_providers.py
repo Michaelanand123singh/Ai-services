@@ -109,7 +109,7 @@ async def switch_primary_provider(
     """
     start_time = time.time()
     log_api_request("/ai/providers/switch", "POST", "system")
-    
+
     try:
         # Validate provider
         if request.provider not in ["openai", "gemini"]:

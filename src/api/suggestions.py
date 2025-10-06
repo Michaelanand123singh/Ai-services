@@ -184,7 +184,7 @@ async def generate_content_suggestions(
         
         # Generate content optimization suggestions
         if request.content:
-            optimization_suggestions = await nlp_service.analyze_content_quality(
+            optimization_suggestions = nlp_service.analyze_content_quality(
                 content=request.content,
                 content_type=request.content_type,
                 platform=request.platform
@@ -249,7 +249,7 @@ async def generate_content_suggestions(
 
 
 @router.post("/hashtags")
-async def generate_hashtag_suggestions(
+async def generate_hashtag_suggestions_simple(
     request: ContentSuggestionRequest,
     rag_service: RAGService = Depends(get_rag_service)
 ):
@@ -272,7 +272,7 @@ async def generate_hashtag_suggestions(
 
 
 @router.post("/captions")
-async def generate_caption_suggestions(
+async def generate_caption_suggestions_simple(
     request: ContentSuggestionRequest,
     rag_service: RAGService = Depends(get_rag_service)
 ):
@@ -296,7 +296,7 @@ async def generate_caption_suggestions(
 
 
 @router.post("/posting-times")
-async def generate_posting_time_suggestions(
+async def generate_posting_time_suggestions_simple(
     request: ContentSuggestionRequest,
     rag_service: RAGService = Depends(get_rag_service)
 ):
@@ -317,7 +317,7 @@ async def generate_posting_time_suggestions(
 
 
 @router.post("/content-ideas")
-async def generate_content_ideas(
+async def generate_content_ideas_simple(
     request: ContentSuggestionRequest,
     rag_service: RAGService = Depends(get_rag_service)
 ):
@@ -362,7 +362,7 @@ async def get_user_suggestion_history(
 
 
 @router.post("/hashtags", response_model=List[HashtagSuggestion])
-async def generate_hashtag_suggestions(
+async def generate_hashtag_suggestions_model(
     request: ContentSuggestionRequest,
     rag_service: RAGService = Depends(get_rag_service),
     nlp_service: NLPService = Depends(get_nlp_service)
@@ -415,7 +415,7 @@ async def generate_hashtag_suggestions(
 
 
 @router.post("/captions", response_model=List[CaptionSuggestion])
-async def generate_caption_suggestions(
+async def generate_caption_suggestions_model(
     request: ContentSuggestionRequest,
     rag_service: RAGService = Depends(get_rag_service),
     nlp_service: NLPService = Depends(get_nlp_service)
@@ -469,7 +469,7 @@ async def generate_caption_suggestions(
 
 
 @router.post("/posting-times", response_model=PostingTimeSuggestion)
-async def generate_posting_time_suggestions(
+async def generate_posting_time_suggestions_model(
     request: ContentSuggestionRequest,
     rag_service: RAGService = Depends(get_rag_service)
 ):
@@ -516,7 +516,7 @@ async def generate_posting_time_suggestions(
 
 
 @router.post("/content-ideas", response_model=List[ContentIdea])
-async def generate_content_ideas(
+async def generate_content_ideas_model(
     request: ContentSuggestionRequest,
     rag_service: RAGService = Depends(get_rag_service),
     nlp_service: NLPService = Depends(get_nlp_service)

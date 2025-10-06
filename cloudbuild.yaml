@@ -1,0 +1,49 @@
+substitutions:
+  _REGION: asia-southeast1
+  _SERVICE: ai-services
+  _REPO: bloocube
+  _IMAGE_TAG: latest
+  _ALLOWED_CORS_ORIGINS: https://bloocube.com,https://admin.bloocube.com,https://api-backend.bloocube.com,https://api-ai-services.bloocube.com
+  _ALLOWED_HOSTS: bloocube.com,admin.bloocube.com,api-backend.bloocube.com,api-ai-services.bloocube.com,localhost,127.0.0.1,*
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  # Build image
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '-f'
+      - 'AI-services/Dockerfile'
+      - '-t'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
+      - 'AI-services'
+
+  # Push image
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
+
+  # Deploy to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - '$_SERVICE'
+      - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
+      - '--region=$_REGION'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--cpu=2'
+      - '--memory=2Gi'
+      - '--timeout=300'
+      - '--min-instances=1'
+      - '--set-env-vars=NODE_ENV=production,ENVIRONMENT=production,LOG_LEVEL=INFO,ALLOWED_CORS_ORIGINS=${_ALLOWED_CORS_ORIGINS},ALLOWED_HOSTS=${_ALLOWED_HOSTS}'
+
+images:
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
+
+
