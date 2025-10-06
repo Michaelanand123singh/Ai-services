@@ -19,6 +19,43 @@ from src.services.nlp_utils import NLPService
 router = APIRouter(prefix="/ai/suggestions", tags=["suggestions"])
 
 
+# Allowlists and simple normalization maps
+VALID_PLATFORMS = {
+    "twitter", "instagram", "linkedin", "facebook", "youtube"
+}
+
+VALID_CONTENT_TYPES = {
+    "post", "tweet", "reel", "story", "short", "video", "title", "description"
+}
+
+PLATFORM_CHAR_LIMITS: Dict[str, int] = {
+    # default top-level caps (field-specific handled on client); server keeps conservative caps
+    "twitter": 280,
+    "instagram": 2200,
+    "linkedin": 3000,
+    "facebook": 63000,
+    "youtube": 5000,  # treat as description default
+}
+
+def normalize_platform(name: str) -> str:
+    v = (name or "").strip().lower()
+    aliases = {"x": "twitter"}
+    return aliases.get(v, v)
+
+def normalize_content_type(ct: str) -> str:
+    v = (ct or "").strip().lower()
+    aliases = {"tweet": "post", "shorts": "short"}
+    return aliases.get(v, v)
+
+def infer_platform_limit(platform: str, content_type: str, requested: Optional[int]) -> int:
+    base = PLATFORM_CHAR_LIMITS.get(platform, 3000)
+    # Inline overrides for some combinations
+    if platform == "youtube" and content_type == "title":
+        base = 100
+    if requested is not None and requested > 0:
+        return min(base, requested)
+    return base
+
 class ContentSuggestionRequest(BaseModel):
     """Request model for content suggestions"""
     user_id: str = Field(..., description="User ID requesting suggestions")
@@ -34,6 +71,8 @@ class ContentSuggestionRequest(BaseModel):
     include_posting_times: bool = Field(default=True, description="Include optimal posting time suggestions")
     include_content_ideas: bool = Field(default=True, description="Include content idea suggestions")
     max_suggestions: int = Field(default=10, description="Maximum number of suggestions per category")
+    max_length: Optional[int] = Field(default=None, description="Optional hard cap on generated text length")
+    language: Optional[str] = Field(default=None, description="Preferred output language (e.g., 'en')")
 
 
 class HashtagSuggestion(BaseModel):
@@ -118,13 +157,23 @@ async def generate_content_suggestions(
     log_api_request("/ai/suggestions", "POST", request.user_id)
     
     try:
-        # Validate request
+        # Normalize & validate request
         if not request.content_type:
             raise ValidationError("content_type", request.content_type, "Content type is required")
-        
+
         if not request.platform:
             raise ValidationError("platform", request.platform, "Platform is required")
-        
+
+        # Normalize values
+        platform = normalize_platform(request.platform)
+        content_type = normalize_content_type(request.content_type)
+
+        if platform not in VALID_PLATFORMS:
+            raise ValidationError("platform", platform, f"Unsupported platform. Allowed: {sorted(VALID_PLATFORMS)}")
+
+        if content_type not in VALID_CONTENT_TYPES:
+            raise ValidationError("content_type", content_type, f"Unsupported content_type. Allowed: {sorted(VALID_CONTENT_TYPES)}")
+
         if request.max_suggestions <= 0 or request.max_suggestions > 50:
             raise ValidationError("max_suggestions", request.max_suggestions, "Max suggestions must be between 1 and 50")
         
@@ -139,8 +188,8 @@ async def generate_content_suggestions(
         if request.include_hashtags:
             hashtag_suggestions = await rag_service.generate_hashtag_suggestions(
                 content=request.content,
-                content_type=request.content_type,
-                platform=request.platform,
+                content_type=content_type,
+                platform=platform,
                 target_audience=request.target_audience,
                 goals=request.goals,
                 max_suggestions=request.max_suggestions
@@ -151,20 +200,36 @@ async def generate_content_suggestions(
         if request.include_captions:
             caption_suggestions = await rag_service.generate_caption_suggestions(
                 content=request.content,
-                content_type=request.content_type,
-                platform=request.platform,
+                content_type=content_type,
+                platform=platform,
                 tone=request.tone,
                 target_audience=request.target_audience,
                 goals=request.goals,
                 max_suggestions=request.max_suggestions
             )
-            suggestions["captions"] = caption_suggestions
+            # Normalize captions to array of { caption, score?, rationale? }
+            norm: List[Dict[str, Any]] = []
+            limit = infer_platform_limit(platform, content_type, request.max_length)
+            for it in caption_suggestions or []:
+                if isinstance(it, str):
+                    norm.append({"caption": it[:limit]})
+                elif isinstance(it, dict):
+                    text = it.get("caption") or it.get("text") or it.get("content") or ""
+                    entry = {
+                        "caption": (text or "")[:limit]
+                    }
+                    if "score" in it:
+                        entry["score"] = it["score"]
+                    if "rationale" in it:
+                        entry["rationale"] = it["rationale"]
+                    norm.append(entry)
+            suggestions["captions"] = norm
         
         # Generate posting time suggestions
         if request.include_posting_times:
             posting_time_suggestions = await rag_service.generate_posting_time_suggestions(
-                platform=request.platform,
-                content_type=request.content_type,
+                platform=platform,
+                content_type=content_type,
                 target_audience=request.target_audience,
                 user_id=request.user_id
             )
@@ -173,8 +238,8 @@ async def generate_content_suggestions(
         # Generate content ideas
         if request.include_content_ideas:
             content_ideas = await rag_service.generate_content_ideas(
-                content_type=request.content_type,
-                platform=request.platform,
+                content_type=content_type,
+                platform=platform,
                 target_audience=request.target_audience,
                 goals=request.goals,
                 tone=request.tone,
@@ -186,16 +251,16 @@ async def generate_content_suggestions(
         if request.content:
             optimization_suggestions = nlp_service.analyze_content_quality(
                 content=request.content,
-                content_type=request.content_type,
-                platform=request.platform
+                content_type=content_type,
+                platform=platform
             )
             suggestions["optimization"] = optimization_suggestions
         
         # Generate engagement predictions
         engagement_predictions = await rag_service.predict_engagement(
             content=request.content,
-            content_type=request.content_type,
-            platform=request.platform,
+            content_type=content_type,
+            platform=platform,
             hashtags=suggestions.get("hashtags", []),
             target_audience=request.target_audience
         )
@@ -211,12 +276,13 @@ async def generate_content_suggestions(
             platform=request.platform
         )
         
+        # Build response with meta info for client UX
         response = ContentSuggestionResponse(
             suggestion_id=f"content_suggestions_{int(time.time())}_{request.user_id}",
             user_id=request.user_id,
             campaign_id=request.campaign_id,
-            content_type=request.content_type,
-            platform=request.platform,
+            content_type=content_type,
+            platform=platform,
             suggestions=suggestions,
             generated_at=time.time(),
             processing_time_ms=processing_time

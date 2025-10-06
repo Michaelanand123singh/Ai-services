@@ -220,7 +220,7 @@ class PerformancePredictionService:
             ai_logger.logger.info(
                 "Campaign performance prediction completed",
                 campaign_id=campaign_id,
-                estimated_roi=campaign_metrics.estimated_roi,
+            estimated_roi=(campaign_metrics.get("estimated_roi") if isinstance(campaign_metrics, dict) else getattr(campaign_metrics, "estimated_roi", None)),
                 success_probability=success_probability
             )
             
@@ -523,25 +523,39 @@ class PerformancePredictionService:
         duration_days: int
     ) -> Dict[str, Any]:
         """Predict campaign metrics"""
-        base_reach = campaign_analysis["audience_size"] * 0.1
-        estimated_total_reach = int(base_reach * len(platforms))
-        estimated_total_impressions = int(estimated_total_reach * 1.5)
-        estimated_engagement_rate = 0.05 + np.random.random() * 0.05
-        estimated_clicks = int(estimated_total_reach * 0.02)
-        estimated_conversions = int(estimated_clicks * 0.1)
-        estimated_roi = (estimated_conversions * 50) / budget  # Assuming $50 per conversion
-        
+        audience_size = max(int(campaign_analysis.get("audience_size", 0)), 0)
+        base_reach = int(audience_size * 0.1)
+        num_platforms = max(len(platforms or []), 1)
+        estimated_total_reach = max(int(base_reach * num_platforms), 0)
+        estimated_total_impressions = max(int(estimated_total_reach * 1.5), 0)
+        estimated_engagement_rate = float(0.05 + float(np.random.random()) * 0.05)
+        estimated_clicks = max(int(estimated_total_reach * 0.02), 0)
+        estimated_conversions = max(int(estimated_clicks * 0.1), 0)
+        safe_budget = float(budget or 0.0)
+
+        # Guard against division by zero/NaN and return 0 when invalid
+        def safe_div(n: float, d: float) -> float:
+            try:
+                return float(n) / float(d) if d not in (0, 0.0) else 0.0
+            except Exception:
+                return 0.0
+
+        estimated_roi = safe_div(estimated_conversions * 50.0, safe_budget) if safe_budget > 0 else 0.0
+        estimated_cpm = safe_div(safe_budget, (estimated_total_impressions / 1000.0)) if estimated_total_impressions > 0 else 0.0
+        estimated_cpc = safe_div(safe_budget, estimated_clicks) if estimated_clicks > 0 else 0.0
+        estimated_cpa = safe_div(safe_budget, estimated_conversions) if estimated_conversions > 0 else 0.0
+
         return {
-            "estimated_total_reach": estimated_total_reach,
-            "estimated_total_impressions": estimated_total_impressions,
-            "estimated_engagement_rate": estimated_engagement_rate,
-            "estimated_clicks": estimated_clicks,
-            "estimated_conversions": estimated_conversions,
-            "estimated_roi": estimated_roi,
-            "estimated_cpm": budget / (estimated_total_impressions / 1000),
-            "estimated_cpc": budget / estimated_clicks,
-            "estimated_cpa": budget / estimated_conversions,
-            "confidence_score": 0.7 + np.random.random() * 0.3
+            "estimated_total_reach": int(estimated_total_reach),
+            "estimated_total_impressions": int(estimated_total_impressions),
+            "estimated_engagement_rate": float(estimated_engagement_rate),
+            "estimated_clicks": int(estimated_clicks),
+            "estimated_conversions": int(estimated_conversions),
+            "estimated_roi": float(estimated_roi),
+            "estimated_cpm": float(estimated_cpm),
+            "estimated_cpc": float(estimated_cpc),
+            "estimated_cpa": float(estimated_cpa),
+            "confidence_score": float(0.7 + float(np.random.random()) * 0.3)
         }
     
     async def _calculate_platform_breakdown(

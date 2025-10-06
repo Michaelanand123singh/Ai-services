@@ -92,10 +92,8 @@ def run_tests() -> int:
     })
 
     # Suggestions suite (minimal payload; expect 200 or 503 if disabled)
-    suggestions_payload = {
+    base_sugg = {
         "user_id": "u_demo",
-        "content_type": "post",
-        "platform": "instagram",
         "content": "Launching our new product today!",
         "target_audience": "tech enthusiasts",
         "goals": ["engagement"],
@@ -104,13 +102,25 @@ def run_tests() -> int:
         "include_captions": True,
         "include_posting_times": True,
         "include_content_ideas": True,
-        "max_suggestions": 5,
+        "max_suggestions": 3,
+        "max_length": 140,
     }
-    run("suggestions_full", "POST", "/ai/suggestions", json=suggestions_payload)
-    run("suggestions_hashtags", "POST", "/ai/suggestions/hashtags", json=suggestions_payload)
-    run("suggestions_captions", "POST", "/ai/suggestions/captions", json=suggestions_payload)
-    run("suggestions_posting_times", "POST", "/ai/suggestions/posting-times", json=suggestions_payload)
-    run("suggestions_content_ideas", "POST", "/ai/suggestions/content-ideas", json=suggestions_payload)
+    for platform, ctype in [
+        ("twitter", "post"),
+        ("instagram", "post"),
+        ("linkedin", "post"),
+        ("facebook", "post"),
+        ("youtube", "title"),
+        ("youtube", "description"),
+        ("youtube", "short"),
+    ]:
+        payload = dict(base_sugg, platform=platform, content_type=ctype)
+        run(f"suggestions_full_{platform}_{ctype}", "POST", "/ai/suggestions", json=payload)
+    payload_default = dict(base_sugg, platform="instagram", content_type="post")
+    run("suggestions_hashtags", "POST", "/ai/suggestions/hashtags", json=payload_default)
+    run("suggestions_captions", "POST", "/ai/suggestions/captions", json=payload_default)
+    run("suggestions_posting_times", "POST", "/ai/suggestions/posting-times", json=payload_default)
+    run("suggestions_content_ideas", "POST", "/ai/suggestions/content-ideas", json=payload_default)
 
     # Predictions suite
     content_pred_payload = {
