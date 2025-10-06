@@ -41,7 +41,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     wget \
     git \
-    # Cleanup
+    # Cleanup \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/* \
@@ -72,19 +72,28 @@ RUN mkdir -p logs data uploads temp && \
 # Switch to non-root user
 USER appuser
 
-# Create startup script (simple and Cloud Run friendly)
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-# Print startup info\n\
-echo "🚀 Starting Bloocube AI Services..."\n\
-echo "📊 Environment: ${NODE_ENV:-production}"\n\
-PORT_TO_USE=${PORT:-${AI_SERVICE_PORT:-8080}}\n\
-echo "🌐 Port: ${PORT_TO_USE}"\n\
-echo "🏠 Host: ${AI_SERVICE_HOST:-0.0.0.0}"\n\
-\n\
-# Start the application (single process for simplicity on Cloud Run)\n\
-exec uvicorn src.main:app \\\n    --host ${AI_SERVICE_HOST:-0.0.0.0} \\\n    --port ${PORT_TO_USE} \\\n    --access-log \\\n    --log-level ${LOG_LEVEL:-info}\n\
+# Create startup script (Cloud Run friendly)
+RUN echo '#!/bin/bash
+set -e
+
+# Print startup info
+echo "🚀 Starting Bloocube AI Services..."
+echo "📊 Environment: ${NODE_ENV:-production}"
+PORT_TO_USE=${PORT:-${AI_SERVICE_PORT:-8080}}
+echo "🌐 Port: ${PORT_TO_USE}"
+echo "🏠 Host: ${AI_SERVICE_HOST:-0.0.0.0}"
+
+# Default workers (I/O bound) can be adjusted via UVICORN_WORKERS env
+WORKERS=${UVICORN_WORKERS:-2}
+echo "🧵 Uvicorn workers: ${WORKERS}"
+
+# Start the application
+exec uvicorn src.main:app \
+    --host ${AI_SERVICE_HOST:-0.0.0.0} \
+    --port ${PORT_TO_USE} \
+    --workers ${WORKERS} \
+    --access-log \
+    --log-level ${LOG_LEVEL:-info}
 ' > /app/start.sh && chmod +x /app/start.sh
 
 # Expose port (Cloud Run uses 8080 by default)
