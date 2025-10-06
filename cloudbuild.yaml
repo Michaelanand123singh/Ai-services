@@ -41,7 +41,7 @@ steps:
       - '--memory=2Gi'
       - '--timeout=300'
       - '--min-instances=1'
-      - '--set-env-vars=NODE_ENV=production,ENVIRONMENT=production,LOG_LEVEL=INFO,ALLOWED_CORS_ORIGINS=${_ALLOWED_CORS_ORIGINS},ALLOWED_HOSTS=${_ALLOWED_HOSTS}'
+      - '--set-env-vars=NODE_ENV=production,ENVIRONMENT=production,LOG_LEVEL=info,ALLOWED_CORS_ORIGINS=${_ALLOWED_CORS_ORIGINS},ALLOWED_HOSTS=${_ALLOWED_HOSTS}'
 
 images:
   - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
