@@ -58,7 +58,6 @@ echo "🚀 Starting Bloocube AI Services..."
 echo "📊 Environment: ${NODE_ENV:-production}"
 
 : "${PORT:=8080}"
-# normalize LOG_LEVEL to lowercase for uvicorn compatibility
 LOG_LEVEL="$(echo "${LOG_LEVEL:-info}" | tr '[:upper:]' '[:lower:]')"
 HOST="${AI_SERVICE_HOST:-0.0.0.0}"
 
@@ -66,14 +65,12 @@ echo "🌐 Port: ${PORT}"
 echo "🏠 Host: ${HOST}"
 echo "🪵 Log level: ${LOG_LEVEL}"
 
-# Optional debug info
 python - <<PY || true
 import sys, os
 print("PY: python version:", sys.version)
 print("PY: PYTHONPATH:", os.environ.get('PYTHONPATH'))
 PY
 
-# Default workers (tweak via UVICORN_WORKERS env)
 WORKERS="${UVICORN_WORKERS:-2}"
 echo "🧵 Uvicorn workers: ${WORKERS}"
 
@@ -84,6 +81,7 @@ exec uvicorn src.main:app \
     --access-log \
     --log-level "${LOG_LEVEL}"
 EOF
+
 
 RUN chmod +x /app/start.sh
 
