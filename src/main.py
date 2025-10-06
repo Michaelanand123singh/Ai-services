@@ -23,10 +23,34 @@ setup_logging()
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
-    ai_logger.logger.info("Starting Bloocube AI Service", version=settings.ai_service_version)
-    
-    # Initialize services here if needed
-    # await initialize_services()
+    try:
+        port_env = os.environ.get("PORT")
+        ai_port_env = os.environ.get("AI_SERVICE_PORT")
+        host_env = os.environ.get("AI_SERVICE_HOST")
+        port_to_use = int(port_env or ai_port_env or settings.ai_service_port or 8080)
+        host_to_use = host_env or settings.ai_service_host or "0.0.0.0"
+
+        ai_logger.logger.info(
+            "Starting Bloocube AI Service",
+            version=settings.ai_service_version,
+            host=host_to_use,
+            port=port_to_use,
+            env=os.environ.get("NODE_ENV", "production")
+        )
+
+        # Soft validation of optional envs (warn, do not crash)
+        if not settings.backend_api_key:
+            ai_logger.logger.warning("BACKEND_API_KEY not set; service-to-service auth may be limited")
+        if not settings.openai_api_key and not settings.gemini_api_key:
+            ai_logger.logger.warning("No primary LLM key configured (OPENAI_API_KEY/GEMINI_API_KEY); using fallbacks only")
+        if not settings.chroma_persist_directory:
+            ai_logger.logger.warning("CHROMA_PERSIST_DIRECTORY not set; using default in-memory/on-disk path")
+
+        # Initialize services here if needed
+        # await initialize_services()
+    except Exception as e:
+        ai_logger.log_error(e, {"stage": "startup"})
+        # Don't block startup; allow probes to catch issues
     
     yield
     

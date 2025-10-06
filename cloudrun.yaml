@@ -253,15 +253,13 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 3
         
-        # Startup probe for slow-starting containers
+        # Startup probe for slow-starting containers (TCP socket is robust to app router changes)
         startupProbe:
-          httpGet:
-            path: /health
+          tcpSocket:
             port: 8080
-          initialDelaySeconds: 30
           periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 30
+          timeoutSeconds: 3
+          failureThreshold: 24
       
       # Traffic configuration
   traffic:
