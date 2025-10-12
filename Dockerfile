@@ -1,98 +1,100 @@
-# =============================================================================
-# BLOOCUBE AI SERVICES - PRODUCTION DOCKERFILE FOR GCP CLOUD RUN
-# =============================================================================
-
-# Use Python 3.11 slim image for better performance and security
 FROM python:3.11-slim
 
-# Set metadata
 LABEL maintainer="Bloocube Team"
 LABEL version="1.0.0"
 LABEL description="Bloocube AI Services for GCP Cloud Run"
 
-# Set working directory
 WORKDIR /app
 
-# Set environment variables for Python optimization
+# Environment
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 ENV PIP_NO_CACHE_DIR=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV NLTK_DATA=/app/nltk_data
-
-# Set default environment
 ENV NODE_ENV=production
 ENV AI_SERVICE_PORT=8080
 ENV AI_SERVICE_HOST=0.0.0.0
 
-# Install system dependencies
+# System dependencies
 RUN apt-get update && apt-get install -y \
-    # Build essentials
     gcc \
     g++ \
     make \
-    # Database drivers
     libpq-dev \
-    # SSL and crypto
     libffi-dev \
     libssl-dev \
-    # Utilities
     curl \
     wget \
     git \
-    # Cleanup
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /tmp/* \
-    && rm -rf /var/tmp/*
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Create application user for security
+# Create non-root user
 RUN groupadd -r appgroup && \
     useradd -r -g appgroup -d /app -s /bin/bash -c "App User" appuser
 
-# Copy requirements first for better Docker layer caching
+# Python dependencies
 COPY requirements.txt ./
-
-# Upgrade pip and install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# Pre-download NLTK data (no heredoc; compatible with older Dockerfile parsers)
-RUN python -c "import os, nltk; d=os.environ.get('NLTK_DATA','/app/nltk_data'); os.makedirs(d, exist_ok=True); nltk.download('punkt', download_dir=d, quiet=True); nltk.download('stopwords', download_dir=d, quiet=True)" || true
+# NLTK data
+RUN python - <<PY
+import os, nltk
+d = os.environ.get('NLTK_DATA', '/app/nltk_data')
+os.makedirs(d, exist_ok=True)
+nltk.download('punkt', download_dir=d, quiet=True)
+nltk.download('stopwords', download_dir=d, quiet=True)
+PY
 
-# Copy application code
+# Copy app
 COPY . .
 
-# Create necessary directories with proper permissions
+# Setup directories and permissions
 RUN mkdir -p logs data uploads temp && \
     chown -R appuser:appgroup /app && \
     chmod -R 755 /app
 
-# Switch to non-root user
 USER appuser
 
-# Create startup script (simple and Cloud Run friendly)
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-# Print startup info\n\
-echo "🚀 Starting Bloocube AI Services..."\n\
-echo "📊 Environment: ${NODE_ENV:-production}"\n\
-PORT_TO_USE=${PORT:-${AI_SERVICE_PORT:-8080}}\n\
-echo "🌐 Port: ${PORT_TO_USE}"\n\
-echo "🏠 Host: ${AI_SERVICE_HOST:-0.0.0.0}"\n\
-\n\
-# Start the application (single process for simplicity on Cloud Run)\n\
-exec uvicorn src.main:app \\\n    --host ${AI_SERVICE_HOST:-0.0.0.0} \\\n    --port ${PORT_TO_USE} \\\n    --access-log \\\n    --log-level ${LOG_LEVEL:-info}\n\
-' > /app/start.sh && chmod +x /app/start.sh
+# Startup script
+RUN cat <<'EOF' > /app/start.sh
+#!/bin/bash
+set -euo pipefail
 
-# Expose port (Cloud Run uses 8080 by default)
+echo "🚀 Starting Bloocube AI Services..."
+echo "📊 Environment: ${NODE_ENV:-production}"
+
+: "${PORT:=8080}"
+LOG_LEVEL="$(echo "${LOG_LEVEL:-info}" | tr '[:upper:]' '[:lower:]')"
+HOST="${AI_SERVICE_HOST:-0.0.0.0}"
+
+echo "🌐 Port: ${PORT}"
+echo "🏠 Host: ${HOST}"
+echo "🪵 Log level: ${LOG_LEVEL}"
+
+# Optional debug info
+python - <<PY || true
+import sys, os
+print("PY: python version:", sys.version)
+print("PY: PYTHONPATH:", os.environ.get('PYTHONPATH'))
+PY
+
+WORKERS="${UVICORN_WORKERS:-2}"
+echo "🧵 Uvicorn workers: ${WORKERS}"
+
+exec uvicorn src.main:app \
+    --host "${HOST}" \
+    --port "${PORT}" \
+    --workers "${WORKERS}" \
+    --access-log \
+    --log-level "${LOG_LEVEL}"
+EOF
+
+RUN chmod +x /app/start.sh
+
 EXPOSE 8080
 
-# Health check (Cloud Run uses PORT=8080)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
-
-# Set the startup command
 CMD ["/app/start.sh"]
