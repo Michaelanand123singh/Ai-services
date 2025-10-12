@@ -55,7 +55,7 @@ FROM python:3.11-slim as production
 # Environment setup
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
+    PYTHONPATH=/app/src \
     NLTK_DATA=/app/nltk_data \
     PORT=8080 \
     UVICORN_WORKERS=2
