@@ -3,7 +3,6 @@ Main FastAPI application for Bloocube AI Service
 """
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 import time
@@ -78,10 +77,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    max_age=86400,
 )
-# Add GZip compression to reduce payload sizes
-app.add_middleware(GZipMiddleware, minimum_size=512)
 
 # Add trusted host middleware with environment-configured hosts
 allowed_hosts = [h.strip() for h in (settings.allowed_hosts or "").split(",") if h.strip()] or ["*"]
