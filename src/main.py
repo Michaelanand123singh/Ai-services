@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
         # Test critical services
         try:
             from src.models.vector_store import get_vector_store
-            vector_store = get_vector_store()
+            vector_store = await get_vector_store()
             ai_logger.logger.info(f"Vector store initialized: {type(vector_store).__name__}")
         except Exception as e:
             ai_logger.logger.warning(f"Vector store initialization failed: {e}")

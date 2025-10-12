@@ -53,6 +53,9 @@ RUN pip install --no-cache-dir --timeout=600 -r /tmp/requirements.txt
 # Download required NLTK data (✅ fixed syntax)
 RUN python -c "import nltk, os; d='/opt/venv/nltk_data'; os.makedirs(d, exist_ok=True); [nltk.download(x, download_dir=d, quiet=True) for x in ['punkt','stopwords','vader_lexicon']]"
 
+# Download spaCy model
+RUN python -c "import spacy; spacy.cli.download('en_core_web_sm')"
+
 # -----------------------------------------------------------------------------
 # STAGE 2 - PRODUCTION
 # -----------------------------------------------------------------------------
