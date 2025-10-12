@@ -66,13 +66,21 @@ steps:
         SERVICE_URL=$$(gcloud run services describe $_SERVICE --region=$_REGION --format="value(status.url)")
         echo "🌐 Service URL: $$SERVICE_URL"
         
-        # Test health endpoint
-        echo "🧪 Testing health endpoint..."
-        curl -f "$$SERVICE_URL/health" || echo "❌ Health check failed"
+        # Test simple ping endpoint first
+        echo "🧪 Testing ping endpoint..."
+        curl -f "$$SERVICE_URL/ping" || echo "❌ Ping endpoint failed"
         
         # Test root endpoint
         echo "🧪 Testing root endpoint..."
         curl -f "$$SERVICE_URL/" || echo "❌ Root endpoint failed"
+        
+        # Test test endpoint
+        echo "🧪 Testing test endpoint..."
+        curl -f "$$SERVICE_URL/test" || echo "❌ Test endpoint failed"
+        
+        # Test health endpoint
+        echo "🧪 Testing health endpoint..."
+        curl -f "$$SERVICE_URL/health" || echo "❌ Health check failed"
         
         # Test docs endpoint
         echo "🧪 Testing docs endpoint..."

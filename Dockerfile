@@ -79,50 +79,88 @@ echo "🪵 Log level: ${LOG_LEVEL}"
 echo "🔍 Python version: $(python --version)"
 echo "🔍 Working directory: $(pwd)"
 echo "🔍 Files in /app: $(ls -la /app)"
+echo "🔍 Python path: $(python -c 'import sys; print(sys.path)')"
 
-# Test critical imports
-echo "🧪 Testing critical imports..."
+# Test basic imports first
+echo "🧪 Testing basic imports..."
+python -c "
+try:
+    import fastapi
+    print('✅ FastAPI imported successfully')
+except Exception as e:
+    print(f'❌ FastAPI import failed: {e}')
+
+try:
+    import uvicorn
+    print('✅ Uvicorn imported successfully')
+except Exception as e:
+    print(f'❌ Uvicorn import failed: {e}')
+
+try:
+    import pydantic
+    print('✅ Pydantic imported successfully')
+except Exception as e:
+    print(f'❌ Pydantic import failed: {e}')
+"
+
+# Test app creation
+echo "🧪 Testing app creation..."
+python -c "
+try:
+    from src.main import app
+    print('✅ FastAPI app created successfully')
+    print(f'App type: {type(app)}')
+except Exception as e:
+    print(f'❌ App creation failed: {e}')
+    import traceback
+    traceback.print_exc()
+"
+
+# Test heavy imports (these might fail but shouldn't crash the app)
+echo "🧪 Testing heavy AI imports..."
 python -c "
 try:
     import torch
     print('✅ PyTorch imported successfully')
 except Exception as e:
-    print(f'❌ PyTorch import failed: {e}')
+    print(f'⚠️ PyTorch import failed: {e}')
 
 try:
     import transformers
     print('✅ Transformers imported successfully')
 except Exception as e:
-    print(f'❌ Transformers import failed: {e}')
-
-try:
-    import langchain
-    print('✅ LangChain imported successfully')
-except Exception as e:
-    print(f'❌ LangChain import failed: {e}')
+    print(f'⚠️ Transformers import failed: {e}')
 
 try:
     import faiss
     print('✅ FAISS imported successfully')
 except Exception as e:
-    print(f'❌ FAISS import failed: {e}')
-
-try:
-    from src.core.config import settings
-    print('✅ Config imported successfully')
-except Exception as e:
-    print(f'❌ Config import failed: {e}')
+    print(f'⚠️ FAISS import failed: {e}')
 "
 
-WORKERS="${UVICORN_WORKERS:-2}"
+# Final startup attempt
+echo "🚀 Starting application..."
+
+# Try to start with multiple workers first
+WORKERS="${UVICORN_WORKERS:-1}"
 echo "🧵 Uvicorn workers: ${WORKERS}"
 
-exec uvicorn src.main:app \
+# Start the application with error handling
+if uvicorn src.main:app \
     --host "${HOST}" \
     --port "${PORT}" \
     --workers "${WORKERS}" \
     --access-log \
-    --log-level "${LOG_LEVEL}"
+    --log-level "${LOG_LEVEL}"; then
+    echo "✅ Application started successfully"
+else
+    echo "⚠️ Multi-worker startup failed, trying single worker..."
+    uvicorn src.main:app \
+        --host "${HOST}" \
+        --port "${PORT}" \
+        --access-log \
+        --log-level "${LOG_LEVEL}"
+fi
 EOF
 
 RUN chmod +x /app/start.sh

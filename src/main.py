@@ -228,6 +228,12 @@ async def test_endpoint():
         "timestamp": time.time()
     }
 
+# Minimal health check that doesn't depend on heavy imports
+@app.get("/ping")
+async def ping():
+    """Minimal ping endpoint for basic health checks"""
+    return {"status": "pong", "timestamp": time.time()}
+
 
 # Metrics endpoint (for Prometheus)
 @app.get("/metrics")
