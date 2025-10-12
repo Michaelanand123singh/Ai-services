@@ -1,40 +1,62 @@
+# =============================================================================
+# BLOOCUBE AI SERVICES - GCP CLOUD BUILD CONFIGURATION
+# =============================================================================
+
 substitutions:
   _REGION: asia-southeast1
   _SERVICE: ai-services
   _REPO: bloocube
   _IMAGE_TAG: latest
   _ALLOWED_CORS_ORIGINS: https://bloocube.com,https://admin.bloocube.com,https://api-backend.bloocube.com,https://api-ai-services.bloocube.com
-  _ALLOWED_HOSTS: bloocube.com,admin.bloocube.com,api-backend.bloocube.com,api-ai-services.bloocube.com,localhost,127.0.0.1,*
+  _ALLOWED_HOSTS: bloocube.com,admin.bloocube.com,api-backend.bloocube.com,api-ai-services.bloocube.com,localhost,127.0.0.1
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  machineType: 'E2_HIGHCPU_8'  # Use high-CPU machine for heavy AI dependencies
-  diskSizeGb: 100  # Increase disk size for large packages
+  machineType: 'E2_HIGHCPU_8'  # High CPU for heavy AI dependencies
+  diskSizeGb: 200  # Increased disk size for large packages
   substitution_option: 'ALLOW_LOOSE'
+  env:
+    - 'DOCKER_BUILDKIT=1'
+    - 'BUILDKIT_PROGRESS=plain'
 
 steps:
-  # Build image
+  # =============================================================================
+  # STEP 1: BUILD DOCKER IMAGE
+  # =============================================================================
   - name: gcr.io/cloud-builders/docker
+    id: 'build-image'
     args:
       - build
       - '-f'
       - 'AI-services/Dockerfile'
       - '-t'
       - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
+      - '-t'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:${BUILD_ID}'
       - '--build-arg'
       - 'BUILDKIT_INLINE_CACHE=1'
       - '--progress=plain'
+      - '--no-cache'
       - 'AI-services'
-    timeout: '1800s'  # 30 minutes timeout for heavy dependencies
+    timeout: '2400s'  # 40 minutes for heavy AI dependencies
+    waitFor: ['-']
 
-  # Push image
+  # =============================================================================
+  # STEP 2: PUSH IMAGE TO REGISTRY
+  # =============================================================================
   - name: gcr.io/cloud-builders/docker
+    id: 'push-image'
     args:
       - push
       - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
+    timeout: '600s'
+    waitFor: ['build-image']
 
-  # Deploy to Cloud Run
+  # =============================================================================
+  # STEP 3: DEPLOY TO CLOUD RUN
+  # =============================================================================
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: 'deploy-service'
     entrypoint: gcloud
     args:
       - run
@@ -51,44 +73,102 @@ steps:
       - '--max-instances=10'
       - '--concurrency=80'
       - '--port=8080'
-      - '--set-env-vars=NODE_ENV=production,ENVIRONMENT=production,LOG_LEVEL=info,ALLOWED_CORS_ORIGINS=${_ALLOWED_CORS_ORIGINS},ALLOWED_HOSTS=${_ALLOWED_HOSTS},AI_SERVICE_NAME=bloocube-ai-service,AI_SERVICE_VERSION=1.0.0'
+      - '--set-env-vars=NODE_ENV=production,ENVIRONMENT=production,LOG_LEVEL=info,ALLOWED_CORS_ORIGINS=${_ALLOWED_CORS_ORIGINS},ALLOWED_HOSTS=${_ALLOWED_HOSTS},AI_SERVICE_NAME=bloocube-ai-service,AI_SERVICE_VERSION=1.0.0,UVICORN_WORKERS=1'
+      - '--set-cloudsql-instances=${_CLOUDSQL_INSTANCE}'
+      - '--add-cloudsql-instances=${_CLOUDSQL_INSTANCE}'
+    timeout: '600s'
+    waitFor: ['push-image']
 
-  # Health check after deployment
+  # =============================================================================
+  # STEP 4: HEALTH CHECK AND VERIFICATION
+  # =============================================================================
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: 'health-check'
     entrypoint: bash
     args:
       - -c
       - |
         echo "🔍 Waiting for service to be ready..."
-        sleep 30
+        sleep 45
         
         # Get the service URL
         SERVICE_URL=$$(gcloud run services describe $_SERVICE --region=$_REGION --format="value(status.url)")
         echo "🌐 Service URL: $$SERVICE_URL"
         
-        # Test simple ping endpoint first
+        # Test endpoints in order of complexity
         echo "🧪 Testing ping endpoint..."
-        curl -f "$$SERVICE_URL/ping" || echo "❌ Ping endpoint failed"
+        if curl -f -s --max-time 30 "$$SERVICE_URL/ping"; then
+          echo "✅ Ping endpoint working"
+        else
+          echo "❌ Ping endpoint failed"
+          exit 1
+        fi
         
-        # Test root endpoint
-        echo "🧪 Testing root endpoint..."
-        curl -f "$$SERVICE_URL/" || echo "❌ Root endpoint failed"
-        
-        # Test test endpoint
         echo "🧪 Testing test endpoint..."
-        curl -f "$$SERVICE_URL/test" || echo "❌ Test endpoint failed"
+        if curl -f -s --max-time 30 "$$SERVICE_URL/test"; then
+          echo "✅ Test endpoint working"
+        else
+          echo "❌ Test endpoint failed"
+          exit 1
+        fi
         
-        # Test health endpoint
+        echo "🧪 Testing root endpoint..."
+        if curl -f -s --max-time 30 "$$SERVICE_URL/"; then
+          echo "✅ Root endpoint working"
+        else
+          echo "❌ Root endpoint failed"
+          exit 1
+        fi
+        
         echo "🧪 Testing health endpoint..."
-        curl -f "$$SERVICE_URL/health" || echo "❌ Health check failed"
+        if curl -f -s --max-time 30 "$$SERVICE_URL/health"; then
+          echo "✅ Health endpoint working"
+        else
+          echo "❌ Health endpoint failed"
+          exit 1
+        fi
         
-        # Test docs endpoint
         echo "🧪 Testing docs endpoint..."
-        curl -f "$$SERVICE_URL/docs" || echo "❌ Docs endpoint failed"
+        if curl -f -s --max-time 30 "$$SERVICE_URL/docs"; then
+          echo "✅ Docs endpoint working"
+        else
+          echo "❌ Docs endpoint failed"
+          exit 1
+        fi
         
-        echo "✅ Deployment verification completed"
+        echo "✅ All health checks passed!"
+        echo "🎉 Bloocube AI Services deployed successfully!"
+    timeout: '300s'
+    waitFor: ['deploy-service']
 
+  # =============================================================================
+  # STEP 5: CLEANUP OLD IMAGES (OPTIONAL)
+  # =============================================================================
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: 'cleanup'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo "🧹 Cleaning up old images..."
+        # Keep only the latest 5 images
+        gcloud artifacts docker images list $_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE \
+          --sort-by=~CREATE_TIME \
+          --limit=100 \
+          --format="value(name)" | tail -n +6 | xargs -r gcloud artifacts docker images delete --quiet || true
+        echo "✅ Cleanup completed"
+    timeout: '300s'
+    waitFor: ['health-check']
+
+# =============================================================================
+# IMAGES TO PUBLISH
+# =============================================================================
 images:
   - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:${BUILD_ID}'
 
-
+# =============================================================================
+# SUBSTITUTION VARIABLES
+# =============================================================================
+substitutions:
+  _CLOUDSQL_INSTANCE: ''  # Add your Cloud SQL instance if needed
