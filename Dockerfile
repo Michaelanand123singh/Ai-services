@@ -41,7 +41,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # NLTK data
-RUN python - <<PY
+RUN python - <<'PY'
 import os, nltk
 d = os.environ.get('NLTK_DATA', '/app/nltk_data')
 os.makedirs(d, exist_ok=True)
