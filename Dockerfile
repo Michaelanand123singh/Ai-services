@@ -114,8 +114,8 @@ RUN chmod -R 755 /app
 # Create a simple startup script as appuser
 USER appuser
 RUN echo '#!/bin/bash' > /app/start.sh && \
-    echo 'echo "🚀 Starting Bloocube AI Services..."' >> /app/start.sh && \
-    echo 'exec uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8080}' >> /app/start.sh && \
+    echo 'echo "🚀 Starting Bloocube AI Services with Gunicorn..."' >> /app/start.sh && \
+    echo 'exec gunicorn -k uvicorn.workers.UvicornWorker -w ${UVICORN_WORKERS:-1} -b 0.0.0.0:${PORT:-8080} src.main:app' >> /app/start.sh && \
     chmod +x /app/start.sh
 
 # Health check (adjust if your app has a different endpoint)
