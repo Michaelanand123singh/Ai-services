@@ -30,9 +30,9 @@ steps:
       - '-f'
       - 'Dockerfile'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/$_SERVICE:$_IMAGE_TAG'
+      - 'gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE:$SHORT_SHA'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA'
+      - 'gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE:latest'
       - '--build-arg'
       - 'BUILDKIT_INLINE_CACHE=1'
       - '--progress=plain'
@@ -48,7 +48,8 @@ steps:
     id: 'push-image'
     args:
       - push
-      - 'gcr.io/$PROJECT_ID/$_SERVICE:$_IMAGE_TAG'
+      - '--all-tags'
+      - 'gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE'
     timeout: '600s'
     waitFor: ['build-image']
 
@@ -62,7 +63,7 @@ steps:
       - run
       - deploy
       - '$_SERVICE'
-      - '--image=gcr.io/$PROJECT_ID/$_SERVICE:$_IMAGE_TAG'
+      - '--image=gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE:$SHORT_SHA'
       - '--region=$_REGION'
       - '--platform=managed'
       - '--allow-unauthenticated'
@@ -150,10 +151,10 @@ steps:
       - |
         echo "🧹 Cleaning up old images..."
         # Keep only the latest 5 images
-        gcloud container images list-tags gcr.io/$PROJECT_ID/$_SERVICE \
+        gcloud container images list-tags gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE \
           --sort-by=~timestamp \
           --limit=100 \
-          --format="value(digest)" | tail -n +6 | xargs -r -I {} gcloud container images delete --quiet gcr.io/$PROJECT_ID/$_SERVICE@{} || true
+          --format="value(digest)" | tail -n +6 | xargs -r -I {} gcloud container images delete --quiet gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE@{} || true
         echo "✅ Cleanup completed"
     timeout: '300s'
     waitFor: ['health-check']
@@ -162,8 +163,8 @@ steps:
 # IMAGES TO PUBLISH
 # =============================================================================
 images:
-  - 'gcr.io/$PROJECT_ID/$_SERVICE:$_IMAGE_TAG'
-  - 'gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE:latest'
+  - 'gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE:$SHORT_SHA'
 
 # =============================================================================
 # SUBSTITUTION VARIABLES
