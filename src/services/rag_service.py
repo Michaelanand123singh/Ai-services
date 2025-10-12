@@ -34,7 +34,13 @@ class RAGService:
         # Initialize embedding model only if OpenAI key is configured
         self.embedding_model = EmbeddingModel() if settings.openai_api_key else None
         # Use configured vector store implementation (FAISS/Chroma/Pinecone)
-        self.vector_store = get_vector_store()
+        try:
+            self.vector_store = get_vector_store()
+        except Exception as e:
+            self.logger.log_error(e, {"operation": "vector_store_init"})
+            # Create a minimal fallback vector store
+            from src.models.vector_store import FAISSVectorStore
+            self.vector_store = FAISSVectorStore()
         self.logger = ai_logger
     
     async def generate_competitor_insights(

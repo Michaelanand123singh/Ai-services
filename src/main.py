@@ -46,8 +46,22 @@ async def lifespan(app: FastAPI):
         if not settings.chroma_persist_directory:
             ai_logger.logger.warning("CHROMA_PERSIST_DIRECTORY not set; using default in-memory/on-disk path")
 
-        # Initialize services here if needed
-        # await initialize_services()
+        # Test critical services
+        try:
+            from src.models.vector_store import get_vector_store
+            vector_store = get_vector_store()
+            ai_logger.logger.info(f"Vector store initialized: {type(vector_store).__name__}")
+        except Exception as e:
+            ai_logger.logger.warning(f"Vector store initialization failed: {e}")
+
+        try:
+            from src.models.multi_llm_client import MultiLLMClient
+            llm_client = MultiLLMClient()
+            ai_logger.logger.info("LLM client initialized successfully")
+        except Exception as e:
+            ai_logger.logger.warning(f"LLM client initialization failed: {e}")
+
+        ai_logger.logger.info("Bloocube AI Service startup completed successfully")
     except Exception as e:
         ai_logger.log_error(e, {"stage": "startup"})
         # Don't block startup; allow probes to catch issues
@@ -55,7 +69,10 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    ai_logger.logger.info("Shutting down Bloocube AI Service")
+    try:
+        ai_logger.logger.info("Shutting down Bloocube AI Service")
+    except Exception as e:
+        print(f"Error during shutdown: {e}")
 
 
 # Create FastAPI application
@@ -173,14 +190,19 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Include routers
-app.include_router(health.router)
-app.include_router(competitor.router)
-app.include_router(suggestions.router)
-app.include_router(matchmaking.router)
-app.include_router(trends.router)
-app.include_router(predictions.router)
-app.include_router(ai_providers.router)
+# Include routers with error handling
+try:
+    app.include_router(health.router)
+    app.include_router(competitor.router)
+    app.include_router(suggestions.router)
+    app.include_router(matchmaking.router)
+    app.include_router(trends.router)
+    app.include_router(predictions.router)
+    app.include_router(ai_providers.router)
+    ai_logger.logger.info("All API routers loaded successfully")
+except Exception as e:
+    ai_logger.log_error(e, {"stage": "router_loading"})
+    # Continue with basic functionality even if some routers fail
 
 
 # Root endpoint
@@ -192,7 +214,18 @@ async def root():
         "version": settings.ai_service_version,
         "status": "running",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "message": "Bloocube AI Services is running successfully!"
+    }
+
+# Simple test endpoint
+@app.get("/test")
+async def test_endpoint():
+    """Simple test endpoint that doesn't require complex dependencies"""
+    return {
+        "status": "ok",
+        "message": "AI Services test endpoint is working",
+        "timestamp": time.time()
     }
 
 

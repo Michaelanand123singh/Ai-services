@@ -75,20 +75,57 @@ echo "🌐 Port: ${PORT}"
 echo "🏠 Host: ${HOST}"
 echo "🪵 Log level: ${LOG_LEVEL}"
 
-# Optional debug info
-python - <<PY || true
-import sys, os
-print("PY: python version:", sys.version)
-print("PY: PYTHONPATH:", os.environ.get('PYTHONPATH'))
-PY
+# Debug info
+echo "🔍 Python version: $(python --version)"
+echo "🔍 Python path: $(python -c 'import sys; print(sys.path)')"
+echo "🔍 Working directory: $(pwd)"
+echo "🔍 Files in /app: $(ls -la /app)"
 
-WORKERS="${UVICORN_WORKERS:-2}"
-echo "🧵 Uvicorn workers: ${WORKERS}"
+# Test imports
+echo "🧪 Testing critical imports..."
+python -c "
+try:
+    import fastapi
+    print('✅ FastAPI imported successfully')
+except Exception as e:
+    print(f'❌ FastAPI import failed: {e}')
 
+try:
+    import pydantic_settings
+    print('✅ Pydantic Settings imported successfully')
+except Exception as e:
+    print(f'❌ Pydantic Settings import failed: {e}')
+
+try:
+    import faiss
+    print('✅ FAISS imported successfully')
+except Exception as e:
+    print(f'❌ FAISS import failed: {e}')
+
+try:
+    from src.core.config import settings
+    print('✅ Config imported successfully')
+except Exception as e:
+    print(f'❌ Config import failed: {e}')
+"
+
+# Test application startup
+echo "🧪 Testing application startup..."
+python -c "
+try:
+    from src.main import app
+    print('✅ FastAPI app created successfully')
+except Exception as e:
+    print(f'❌ FastAPI app creation failed: {e}')
+    import traceback
+    traceback.print_exc()
+"
+
+# Start with single worker for Cloud Run (more reliable)
+echo "🚀 Starting application with single worker..."
 exec uvicorn src.main:app \
     --host "${HOST}" \
     --port "${PORT}" \
-    --workers "${WORKERS}" \
     --access-log \
     --log-level "${LOG_LEVEL}"
 EOF
