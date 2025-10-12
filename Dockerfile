@@ -35,13 +35,19 @@ RUN apt-get update && apt-get install -y \
 RUN groupadd -r appgroup && \
     useradd -r -g appgroup -d /app -s /bin/bash -c "App User" appuser
 
-# Python dependencies
+# Python dependencies - optimized for heavy AI packages
 COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt --timeout=600 --retries=3
 
-# NLTK data (moved to runtime to avoid build issues)
-RUN mkdir -p /app/nltk_data
+# NLTK data
+RUN python - <<'PY'
+import os, nltk
+d = os.environ.get('NLTK_DATA', '/app/nltk_data')
+os.makedirs(d, exist_ok=True)
+nltk.download('punkt', download_dir=d, quiet=True)
+nltk.download('stopwords', download_dir=d, quiet=True)
+PY
 
 # Copy app
 COPY . .
@@ -71,24 +77,29 @@ echo "🪵 Log level: ${LOG_LEVEL}"
 
 # Debug info
 echo "🔍 Python version: $(python --version)"
-echo "🔍 Python path: $(python -c 'import sys; print(sys.path)')"
 echo "🔍 Working directory: $(pwd)"
 echo "🔍 Files in /app: $(ls -la /app)"
 
-# Test imports
+# Test critical imports
 echo "🧪 Testing critical imports..."
 python -c "
 try:
-    import fastapi
-    print('✅ FastAPI imported successfully')
+    import torch
+    print('✅ PyTorch imported successfully')
 except Exception as e:
-    print(f'❌ FastAPI import failed: {e}')
+    print(f'❌ PyTorch import failed: {e}')
 
 try:
-    import pydantic_settings
-    print('✅ Pydantic Settings imported successfully')
+    import transformers
+    print('✅ Transformers imported successfully')
 except Exception as e:
-    print(f'❌ Pydantic Settings import failed: {e}')
+    print(f'❌ Transformers import failed: {e}')
+
+try:
+    import langchain
+    print('✅ LangChain imported successfully')
+except Exception as e:
+    print(f'❌ LangChain import failed: {e}')
 
 try:
     import faiss
@@ -103,37 +114,13 @@ except Exception as e:
     print(f'❌ Config import failed: {e}')
 "
 
-# Download NLTK data
-echo "📚 Downloading NLTK data..."
-python -c "
-import os, nltk
-d = os.environ.get('NLTK_DATA', '/app/nltk_data')
-os.makedirs(d, exist_ok=True)
-try:
-    nltk.download('punkt', download_dir=d, quiet=True)
-    nltk.download('stopwords', download_dir=d, quiet=True)
-    print('✅ NLTK data downloaded successfully')
-except Exception as e:
-    print(f'⚠️ NLTK data download failed: {e}')
-"
+WORKERS="${UVICORN_WORKERS:-2}"
+echo "🧵 Uvicorn workers: ${WORKERS}"
 
-# Test application startup
-echo "🧪 Testing application startup..."
-python -c "
-try:
-    from src.main import app
-    print('✅ FastAPI app created successfully')
-except Exception as e:
-    print(f'❌ FastAPI app creation failed: {e}')
-    import traceback
-    traceback.print_exc()
-"
-
-# Start with single worker for Cloud Run (more reliable)
-echo "🚀 Starting application with single worker..."
 exec uvicorn src.main:app \
     --host "${HOST}" \
     --port "${PORT}" \
+    --workers "${WORKERS}" \
     --access-log \
     --log-level "${LOG_LEVEL}"
 EOF

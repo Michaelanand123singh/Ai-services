@@ -27,11 +27,11 @@ spec:
         # Scaling configuration
         autoscaling.knative.dev/minScale: "1"
         autoscaling.knative.dev/maxScale: "10"
-        # Resource allocation
-        run.googleapis.com/memory: "2Gi"
-        run.googleapis.com/cpu: "2"
+        # Resource allocation - optimized for AI workloads
+        run.googleapis.com/memory: "8Gi"
+        run.googleapis.com/cpu: "4"
         # Timeout configuration
-        run.googleapis.com/timeout: "300s"
+        run.googleapis.com/timeout: "900s"
         # VPC configuration (if needed)
         # run.googleapis.com/vpc-access-connector: "projects/PROJECT_ID/locations/REGION/connectors/CONNECTOR_NAME"
         # run.googleapis.com/vpc-access-egress: "all-traffic"
