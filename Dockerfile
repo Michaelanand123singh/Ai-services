@@ -40,14 +40,8 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# NLTK data
-RUN python - <<'PY'
-import os, nltk
-d = os.environ.get('NLTK_DATA', '/app/nltk_data')
-os.makedirs(d, exist_ok=True)
-nltk.download('punkt', download_dir=d, quiet=True)
-nltk.download('stopwords', download_dir=d, quiet=True)
-PY
+# NLTK data (moved to runtime to avoid build issues)
+RUN mkdir -p /app/nltk_data
 
 # Copy app
 COPY . .
@@ -107,6 +101,20 @@ try:
     print('✅ Config imported successfully')
 except Exception as e:
     print(f'❌ Config import failed: {e}')
+"
+
+# Download NLTK data
+echo "📚 Downloading NLTK data..."
+python -c "
+import os, nltk
+d = os.environ.get('NLTK_DATA', '/app/nltk_data')
+os.makedirs(d, exist_ok=True)
+try:
+    nltk.download('punkt', download_dir=d, quiet=True)
+    nltk.download('stopwords', download_dir=d, quiet=True)
+    print('✅ NLTK data downloaded successfully')
+except Exception as e:
+    print(f'⚠️ NLTK data download failed: {e}')
 "
 
 # Test application startup
