@@ -142,12 +142,16 @@ chroma_db/
 *.index
 *.faiss
 
-# Model files
-models/
+# Model files (but not source code)
 *.pkl
 *.joblib
 *.h5
 *.pb
+*.bin
+*.safetensors
+*.onnx
+*.pt
+*.pth
 
 # Cache files
 .cache/
