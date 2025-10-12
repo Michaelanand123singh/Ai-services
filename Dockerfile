@@ -55,10 +55,9 @@ FROM python:3.11-slim as production
 # Environment setup
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src \
+    PYTHONPATH=/app \
     NLTK_DATA=/app/nltk_data \
-    PORT=8080 \
-    UVICORN_WORKERS=2
+    PORT=8080
 
 # Install minimal runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -96,7 +95,7 @@ USER appuser
 # Create startup script
 RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'echo "🚀 Starting Bloocube AI Services..."' >> /app/start.sh && \
-    echo 'exec uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8080}' >> /app/start.sh && \
+    echo 'exec uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1' >> /app/start.sh && \
     chmod +x /app/start.sh
 
 # Health check
