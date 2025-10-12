@@ -28,7 +28,7 @@ steps:
     args:
       - build
       - '-f'
-      - 'AI-services/Dockerfile'
+      - 'Dockerfile'
       - '-t'
       - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
       - '-t'
@@ -37,7 +37,7 @@ steps:
       - 'BUILDKIT_INLINE_CACHE=1'
       - '--progress=plain'
       - '--no-cache'
-      - 'AI-services'
+      - '.'
     timeout: '2400s'  # 40 minutes for heavy AI dependencies
     waitFor: ['-']
 
@@ -73,9 +73,7 @@ steps:
       - '--max-instances=10'
       - '--concurrency=80'
       - '--port=8080'
-      - '--set-env-vars=NODE_ENV=production,ENVIRONMENT=production,LOG_LEVEL=info,ALLOWED_CORS_ORIGINS=${_ALLOWED_CORS_ORIGINS},ALLOWED_HOSTS=${_ALLOWED_HOSTS},AI_SERVICE_NAME=bloocube-ai-service,AI_SERVICE_VERSION=1.0.0,UVICORN_WORKERS=1'
-      - '--set-cloudsql-instances=${_CLOUDSQL_INSTANCE}'
-      - '--add-cloudsql-instances=${_CLOUDSQL_INSTANCE}'
+      - '--set-env-vars=NODE_ENV=production,ENVIRONMENT=production,LOG_LEVEL=info,ALLOWED_CORS_ORIGINS=${_ALLOWED_CORS_ORIGINS},ALLOWED_HOSTS=${_ALLOWED_HOSTS},AI_SERVICE_NAME=bloocube-ai-service,AI_SERVICE_VERSION=1.0.0,UVICORN_WORKERS=1,AI_SERVICE_PORT=8080,AI_SERVICE_HOST=0.0.0.0,PORT=8080,PRIMARY_AI_PROVIDER=gemini,ENABLE_AI_FALLBACK=true'
     timeout: '600s'
     waitFor: ['push-image']
 
