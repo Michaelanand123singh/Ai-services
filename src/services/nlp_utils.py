@@ -7,7 +7,15 @@ import string
 from collections import Counter
 import nltk
 from textblob import TextBlob
-import spacy
+
+# Optional spacy import
+try:
+    import spacy
+    SPACY_AVAILABLE = True
+except ImportError:
+    spacy = None
+    SPACY_AVAILABLE = False
+
 from src.core.config import settings
 from src.core.logger import ai_logger
 
@@ -23,9 +31,12 @@ class NLPService:
         """Load NLP models"""
         try:
             # Load spaCy model (optional). If unavailable, continue with basic NLP.
-            try:
-                self.nlp = spacy.load("en_core_web_sm")
-            except Exception:
+            if SPACY_AVAILABLE and spacy:
+                try:
+                    self.nlp = spacy.load("en_core_web_sm")
+                except Exception:
+                    self.nlp = None
+            else:
                 self.nlp = None
             
             # Download required NLTK data
@@ -280,7 +291,7 @@ class NLPService:
                     "label": ent.label_,
                     "start": ent.start_char,
                     "end": ent.end_char,
-                    "description": spacy.explain(ent.label_)
+                    "description": spacy.explain(ent.label_) if SPACY_AVAILABLE and spacy else ent.label_
                 })
             
             return entities

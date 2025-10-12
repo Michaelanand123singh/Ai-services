@@ -14,6 +14,18 @@ class AIServiceException(Exception):
         super().__init__(self.message)
 
 
+class AIProviderError(AIServiceException):
+    """Raised when AI provider operation fails"""
+    
+    def __init__(self, message: str, provider: str = None):
+        self.provider = provider
+        super().__init__(
+            message,
+            "AI_PROVIDER_ERROR",
+            {"provider": provider}
+        )
+
+
 class ModelNotAvailableError(AIServiceException):
     """Raised when AI model is not available"""
     
@@ -260,6 +272,7 @@ ERROR_CODE_TO_HTTP_STATUS = {
     "INSUFFICIENT_DATA": 422,
     "RATE_LIMIT_EXCEEDED": 429,
     "MODEL_NOT_AVAILABLE": 503,
+    "AI_PROVIDER_ERROR": 502,
     "EXTERNAL_SERVICE_ERROR": 502,
     "SERVICE_UNAVAILABLE": 503,
     "AI_SERVICE_ERROR": 500,
