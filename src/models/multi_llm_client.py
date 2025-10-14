@@ -28,7 +28,7 @@ class MultiLLMClient:
     def __init__(self):
         self.primary_provider = settings.primary_ai_provider
         self.fallback_provider = settings.fallback_ai_provider
-        self.enable_fallback = settings.enable_ai_fallback
+        self.enable_fallback = settings.enable_fallback
         
         # Initialize OpenAI if available
         if settings.openai_api_key:

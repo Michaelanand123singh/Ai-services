@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     
     # Fallback Configuration
     enable_fallback: bool = Field(default=True, env="ENABLE_AI_FALLBACK")
-    fallback_provider: str = Field(default="gemini", env="FALLBACK_AI_PROVIDER")
+    fallback_ai_provider: str = Field(default="gemini", env="FALLBACK_AI_PROVIDER")
     
     # Vector Database Configuration
     pinecone_api_key: Optional[str] = Field(default=None, env="PINECONE_API_KEY")
