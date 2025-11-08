@@ -15,7 +15,7 @@ This guide provides comprehensive instructions for deploying the Bloocube AI Ser
 - **Cloud Run** service
 - **Service Account** with necessary permissions
 
-### Required Environment Variables
+### Required Environment Variable
 ```bash
 export GCP_PROJECT_ID="your-project-id"
 export GCP_REGION="asia-southeast1"  # Optional, defaults to asia-southeast1
