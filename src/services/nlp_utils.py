@@ -334,8 +334,8 @@ class NLPService:
         suggestions = self._generate_content_suggestions(
             content, content_type, platform, {
                 "word_count": word_count,
-                "hashtags": len(hashtags),
-                "mentions": len(mentions),
+                "hashtag_count": len(hashtags),
+                "mention_count": len(mentions),
                 "sentiment": sentiment,
                 "readability": readability
             }
@@ -406,21 +406,35 @@ class NLPService:
             suggestions.append("Content might be too long for social media")
         
         # Hashtag suggestions
-        hashtag_count = metrics["hashtags"]
+        hashtag_count = metrics["hashtag_count"]
         if hashtag_count == 0:
             suggestions.append("Consider adding relevant hashtags to increase discoverability")
         elif hashtag_count > 20:
             suggestions.append("Consider reducing hashtag count for better readability")
         
         # Sentiment suggestions
-        sentiment = metrics["sentiment"]["sentiment"]
-        if sentiment == "negative":
-            suggestions.append("Consider adjusting tone to be more positive or neutral")
+        try:
+            sentiment_data = metrics.get("sentiment", {})
+            if isinstance(sentiment_data, dict):
+                sentiment = sentiment_data.get("sentiment", "neutral")
+            else:
+                sentiment = "neutral"
+            if sentiment == "negative":
+                suggestions.append("Consider adjusting tone to be more positive or neutral")
+        except Exception:
+            pass  # Skip sentiment suggestions if there's an error
         
         # Readability suggestions
-        readability = metrics["readability"]["level"]
-        if readability in ["difficult", "very_difficult"]:
-            suggestions.append("Consider simplifying language for better readability")
+        try:
+            readability_data = metrics.get("readability", {})
+            if isinstance(readability_data, dict):
+                readability = readability_data.get("level", "unknown")
+            else:
+                readability = "unknown"
+            if readability in ["difficult", "very_difficult"]:
+                suggestions.append("Consider simplifying language for better readability")
+        except Exception:
+            pass  # Skip readability suggestions if there's an error
         
         return suggestions
     

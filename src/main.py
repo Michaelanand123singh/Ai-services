@@ -7,13 +7,14 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 import time
 import uvicorn
+import asyncio
 from contextlib import asynccontextmanager
 
 from src.core.config import settings
 import os
 from src.core.logger import setup_logging, ai_logger
 from src.core.exceptions import AIServiceException, get_http_status_from_error
-from src.api import health, competitor, suggestions, matchmaking, trends, predictions, ai_providers
+from src.api import health, competitor, suggestions, matchmaking, trends, predictions, ai_providers, rewrite, score
 
 # Setup logging
 setup_logging()
@@ -46,11 +47,12 @@ async def lifespan(app: FastAPI):
         if not settings.chroma_persist_directory:
             ai_logger.logger.warning("CHROMA_PERSIST_DIRECTORY not set; using default in-memory/on-disk path")
 
-        # Test critical services
+        # Test critical services (non-blocking)
         try:
             from src.models.vector_store import get_vector_store
-            vector_store = await get_vector_store()
-            ai_logger.logger.info(f"Vector store initialized: {type(vector_store).__name__}")
+            # Initialize vector store asynchronously but don't block startup
+            asyncio.create_task(get_vector_store())
+            ai_logger.logger.info("Vector store initialization started")
         except Exception as e:
             ai_logger.logger.warning(f"Vector store initialization failed: {e}")
 
@@ -71,8 +73,9 @@ async def lifespan(app: FastAPI):
     # Shutdown
     try:
         ai_logger.logger.info("Shutting down Bloocube AI Service")
+        # Cleanup any resources if needed
     except Exception as e:
-        print(f"Error during shutdown: {e}")
+        ai_logger.log_error(e, {"stage": "shutdown"})
 
 
 # Create FastAPI application
@@ -181,11 +184,14 @@ async def general_exception_handler(request: Request, exc: Exception):
         "exception_type": type(exc).__name__
     })
     
+    # For debugging, return more detailed error information
     return JSONResponse(
         status_code=500,
         content={
             "error": "INTERNAL_SERVER_ERROR",
-            "message": "An unexpected error occurred"
+            "message": "An unexpected error occurred",
+            "exception_type": type(exc).__name__,
+            "exception_message": str(exc)
         }
     )
 
@@ -195,6 +201,8 @@ try:
     app.include_router(health.router)
     app.include_router(competitor.router)
     app.include_router(suggestions.router)
+    app.include_router(rewrite.router)
+    app.include_router(score.router)
     app.include_router(matchmaking.router)
     app.include_router(trends.router)
     app.include_router(predictions.router)
