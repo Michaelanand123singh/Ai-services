@@ -1,6 +1,7 @@
 # Core FastAPI and web framework
 fastapi>=0.104.1
 uvicorn[standard]>=0.24.0
+gunicorn>=21.2.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 
@@ -35,6 +36,7 @@ beautifulsoup4>=4.12.2
 lxml>=4.9.3
 textblob>=0.17.1
 nltk>=3.8.1
+spacy>=3.7.0
 
 # Social media APIs (simplified)
 tweepy>=4.14.0

@@ -28,16 +28,16 @@ steps:
     args:
       - build
       - '-f'
-      - 'AI-services/Dockerfile'
+      - 'Dockerfile'
       - '-t'
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
+      - 'gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE:$SHORT_SHA'
       - '-t'
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:${BUILD_ID}'
+      - 'gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE:latest'
       - '--build-arg'
       - 'BUILDKIT_INLINE_CACHE=1'
       - '--progress=plain'
       - '--no-cache'
-      - 'AI-services'
+      - '.'
     timeout: '2400s'  # 40 minutes for heavy AI dependencies
     waitFor: ['-']
 
@@ -48,7 +48,8 @@ steps:
     id: 'push-image'
     args:
       - push
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
+      - '--all-tags'
+      - 'gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE'
     timeout: '600s'
     waitFor: ['build-image']
 
@@ -62,7 +63,7 @@ steps:
       - run
       - deploy
       - '$_SERVICE'
-      - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
+      - '--image=gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE:$SHORT_SHA'
       - '--region=$_REGION'
       - '--platform=managed'
       - '--allow-unauthenticated'
@@ -73,9 +74,7 @@ steps:
       - '--max-instances=10'
       - '--concurrency=80'
       - '--port=8080'
-      - '--set-env-vars=NODE_ENV=production,ENVIRONMENT=production,LOG_LEVEL=info,ALLOWED_CORS_ORIGINS=${_ALLOWED_CORS_ORIGINS},ALLOWED_HOSTS=${_ALLOWED_HOSTS},AI_SERVICE_NAME=bloocube-ai-service,AI_SERVICE_VERSION=1.0.0,UVICORN_WORKERS=1'
-      - '--set-cloudsql-instances=${_CLOUDSQL_INSTANCE}'
-      - '--add-cloudsql-instances=${_CLOUDSQL_INSTANCE}'
+      - '--set-env-vars=NODE_ENV=production,ENVIRONMENT=production,LOG_LEVEL=info,ALLOWED_CORS_ORIGINS=${_ALLOWED_CORS_ORIGINS},ALLOWED_HOSTS=${_ALLOWED_HOSTS},AI_SERVICE_NAME=bloocube-ai-service,AI_SERVICE_VERSION=1.0.0,UVICORN_WORKERS=4,AI_SERVICE_PORT=8080,AI_SERVICE_HOST=0.0.0.0,PORT=8080,PRIMARY_AI_PROVIDER=gemini,ENABLE_AI_FALLBACK=true'
     timeout: '600s'
     waitFor: ['push-image']
 
@@ -152,10 +151,10 @@ steps:
       - |
         echo "🧹 Cleaning up old images..."
         # Keep only the latest 5 images
-        gcloud artifacts docker images list $_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE \
-          --sort-by=~CREATE_TIME \
+        gcloud container images list-tags gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE \
+          --sort-by=~timestamp \
           --limit=100 \
-          --format="value(name)" | tail -n +6 | xargs -r gcloud artifacts docker images delete --quiet || true
+          --format="value(digest)" | tail -n +6 | xargs -r -I {} gcloud container images delete --quiet gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE@{} || true
         echo "✅ Cleanup completed"
     timeout: '300s'
     waitFor: ['health-check']
@@ -164,8 +163,8 @@ steps:
 # IMAGES TO PUBLISH
 # =============================================================================
 images:
-  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$_IMAGE_TAG'
-  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:${BUILD_ID}'
+  - 'gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE:latest'
+  - 'gcr.io/$PROJECT_ID/github.com/michaelanand123singh/$_SERVICE:$SHORT_SHA'
 
 # =============================================================================
 # SUBSTITUTION VARIABLES

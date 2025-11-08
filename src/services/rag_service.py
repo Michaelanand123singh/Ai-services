@@ -35,13 +35,25 @@ class RAGService:
         self.embedding_model = EmbeddingModel() if settings.openai_api_key else None
         # Use configured vector store implementation (FAISS/Chroma/Pinecone)
         try:
-            self.vector_store = get_vector_store()
+            # Initialize vector store asynchronously
+            self.vector_store = None  # Will be initialized on first use
         except Exception as e:
             self.logger.log_error(e, {"operation": "vector_store_init"})
             # Create a minimal fallback vector store
             from src.models.vector_store import FAISSVectorStore
             self.vector_store = FAISSVectorStore()
         self.logger = ai_logger
+    
+    async def _ensure_vector_store(self):
+        """Ensure vector store is initialized"""
+        if self.vector_store is None:
+            try:
+                self.vector_store = await get_vector_store()
+            except Exception as e:
+                self.logger.log_error(e, {"operation": "vector_store_lazy_init"})
+                # Create a minimal fallback vector store
+                from src.models.vector_store import FAISSVectorStore
+                self.vector_store = FAISSVectorStore()
     
     async def generate_competitor_insights(
         self, 
@@ -68,7 +80,7 @@ class RAGService:
             processing_time = int((time.time() - start_time) * 1000)
             self.logger.log_ai_operation(
                 operation="competitor_insights_generation",
-                model=settings.openai_model,
+                model=settings.primary_ai_provider,
                 tokens_used=insights.get("tokens_used", 0),
                 duration_ms=processing_time,
                 success=True
@@ -115,7 +127,7 @@ class RAGService:
             processing_time = int((time.time() - start_time) * 1000)
             self.logger.log_ai_operation(
                 operation="hashtag_suggestions_generation",
-                model=settings.openai_model,
+                model=settings.primary_ai_provider,
                 tokens_used=suggestions.get("tokens_used", 0),
                 duration_ms=processing_time,
                 success=True
@@ -163,7 +175,7 @@ class RAGService:
             processing_time = int((time.time() - start_time) * 1000)
             self.logger.log_ai_operation(
                 operation="caption_suggestions_generation",
-                model=settings.openai_model,
+                model=settings.primary_ai_provider,
                 tokens_used=suggestions.get("tokens_used", 0),
                 duration_ms=processing_time,
                 success=True
@@ -205,7 +217,7 @@ class RAGService:
             processing_time = int((time.time() - start_time) * 1000)
             self.logger.log_ai_operation(
                 operation="posting_time_suggestions_generation",
-                model=settings.openai_model,
+                model=settings.primary_ai_provider,
                 tokens_used=suggestions.get("tokens_used", 0),
                 duration_ms=processing_time,
                 success=True
@@ -249,7 +261,7 @@ class RAGService:
             processing_time = int((time.time() - start_time) * 1000)
             self.logger.log_ai_operation(
                 operation="content_ideas_generation",
-                model=settings.openai_model,
+                model=settings.primary_ai_provider,
                 tokens_used=ideas.get("tokens_used", 0),
                 duration_ms=processing_time,
                 success=True
@@ -292,7 +304,7 @@ class RAGService:
             processing_time = int((time.time() - start_time) * 1000)
             self.logger.log_ai_operation(
                 operation="engagement_prediction",
-                model=settings.openai_model,
+                model=settings.primary_ai_provider,
                 tokens_used=prediction.get("tokens_used", 0),
                 duration_ms=processing_time,
                 success=True
@@ -594,3 +606,151 @@ class RAGService:
             "confidence_score": 0.8,
             "tokens_used": 400
         }
+    
+    async def rewrite_content(
+        self,
+        field: str,
+        current_content: str,
+        platform: str,
+        content_type: str = "post",
+        tone: str = "professional",
+        goals: List[str] = None,
+        max_length: int = 2000,
+        user_id: Optional[str] = None
+    ) -> str:
+        """Rewrite content for a specific field and platform using RAG"""
+        try:
+            start_time = time.time()
+            
+            # Prepare query for content rewriting
+            query = self._build_rewrite_query(
+                field, current_content, platform, content_type, tone, goals, max_length
+            )
+            
+            # Retrieve relevant context from vector store
+            context_documents = await self._retrieve_rewrite_context(
+                field, platform, content_type, tone, user_id
+            )
+            
+            # Create RAG context
+            rag_context = RAGContext(
+                user_id=user_id or "anonymous",
+                query=query,
+                context_documents=context_documents,
+                max_tokens=min(max_length * 2, 4000),  # Allow some buffer for generation
+                temperature=0.7
+            )
+            
+            # Generate rewritten content using RAG
+            rewritten_content = await self._generate_rewrite_with_rag(rag_context, max_length)
+            
+            processing_time = int((time.time() - start_time) * 1000)
+            self.logger.log_ai_operation(
+                operation="content_rewrite",
+                model=settings.primary_ai_provider,
+                tokens_used=len(rewritten_content.split()) * 1.3,  # Rough estimate
+                duration_ms=processing_time,
+                success=True
+            )
+            
+            return rewritten_content
+            
+        except Exception as e:
+            self.logger.log_error(e, {"operation": "rewrite_content", "field": field, "platform": platform})
+            raise AIServiceException(f"Failed to rewrite content: {str(e)}")
+    
+    def _build_rewrite_query(
+        self,
+        field: str,
+        current_content: str,
+        platform: str,
+        content_type: str,
+        tone: str,
+        goals: List[str],
+        max_length: int
+    ) -> str:
+        """Build query for content rewriting"""
+        query_parts = [
+            f"Rewrite the {field} for a {content_type} on {platform}",
+            f"Current content: {current_content[:300]}",
+            f"Tone: {tone}",
+            f"Platform: {platform}",
+            f"Maximum length: {max_length} characters",
+            f"Goals: {', '.join(goals) if goals else 'General engagement'}",
+            f"Make it more engaging, platform-appropriate, and aligned with the specified tone"
+        ]
+        return ". ".join(query_parts)
+    
+    async def _retrieve_rewrite_context(
+        self,
+        field: str,
+        platform: str,
+        content_type: str,
+        tone: str,
+        user_id: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Retrieve relevant context for content rewriting"""
+        # This would typically query the vector store for relevant content examples
+        # For now, return empty list
+        return []
+    
+    async def _generate_rewrite_with_rag(
+        self, 
+        rag_context: RAGContext,
+        max_length: int
+    ) -> str:
+        """Generate rewritten content using RAG"""
+        try:
+            # Build the prompt for content rewriting
+            prompt = f"""
+            You are an expert content writer specializing in social media content creation.
+            
+            Task: Rewrite the following content to make it more engaging and platform-appropriate.
+            
+            Original Content: {rag_context.query}
+            
+            Requirements:
+            - Maximum length: {max_length} characters
+            - Make it engaging and platform-appropriate
+            - Maintain the core message while improving clarity and impact
+            - Use appropriate tone and style for the target platform
+            - Ensure it follows best practices for the platform
+            
+            Rewritten Content:
+            """
+            
+            # Generate content using the LLM client
+            response = await self.llm_client.generate_text(
+                prompt=prompt,
+                max_tokens=min(max_length * 2, 2000),  # Allow some buffer
+                temperature=0.7
+            )
+            
+            # Extract and clean the rewritten content
+            rewritten_content = response.content.strip()
+            
+            # Ensure it doesn't exceed the maximum length
+            if len(rewritten_content) > max_length:
+                rewritten_content = rewritten_content[:max_length].rsplit(' ', 1)[0] + "..."
+            
+            return rewritten_content
+            
+        except Exception as e:
+            self.logger.log_error(e, {"operation": "generate_rewrite_with_rag"})
+            # Fallback to a simple rewrite if RAG fails
+            return self._simple_rewrite_fallback(rag_context.query, max_length)
+    
+    def _simple_rewrite_fallback(self, content: str, max_length: int) -> str:
+        """Simple fallback rewrite when RAG fails"""
+        # Basic improvements without AI
+        improved = content.strip()
+        
+        # Add some basic improvements
+        if not improved.endswith(('.', '!', '?')):
+            improved += '.'
+        
+        # Ensure it fits within the limit
+        if len(improved) > max_length:
+            improved = improved[:max_length].rsplit(' ', 1)[0] + "..."
+        
+        return improved
